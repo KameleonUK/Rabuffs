@@ -81,8 +81,30 @@ function RABui_OnEvent()
 	end
 end
 
+-- Preview (the options pages' "Preview bar window" button): the window and every bar stay shown, whatever the
+-- group, combat and hide-active settings say, until the options window closes.
+RABui_Preview = false;
+
+function RABui_StartPreview()
+	RABui_Preview = true;
+	RABui_UpdateBars();
+	RABFrame:Show();
+end
+
+function RABui_EndPreview()
+	if (not RABui_Preview) then
+		return;
+	end
+	RABui_Preview = false;
+	RABui_SyncBars();
+	RABui_UpdateVisibility(RAB_CurrentGroupStatus, RAB_CurrentGroupStatus);
+	RABui_HideInCombat();
+end
+
 function RABui_UpdateVisibility(currentGroupStatus, previousGroupStatus)
-	if (previousGroupStatus == -1 and RABui_IsUIShown) then
+	if (RABui_Preview) then
+		RABFrame:Show();
+	elseif (previousGroupStatus == -1 and RABui_IsUIShown) then
 		RABFrame:Show();
 	elseif (previousGroupStatus == -1 and not RABui_IsUIShown) then
 		RABFrame:Hide();
@@ -96,7 +118,7 @@ function RABui_UpdateVisibility(currentGroupStatus, previousGroupStatus)
 end
 
 function RABui_HideInCombat()
-	if (RABui_Settings.hideincombat and UnitAffectingCombat("player")) then
+	if (RABui_Settings.hideincombat and UnitAffectingCombat("player") and not RABui_Preview) then
 		RABFrame:Hide();
 	end
 end
@@ -150,8 +172,8 @@ function RABui_SyncBars()
 	local barsToShow = {};
 	local shownBarCount = 0;
 
-	-- check if bar should be hidden/unhidden
-	if RABui_Settings.hideactive then
+	-- check if bar should be hidden/unhidden (a preview shows every bar)
+	if RABui_Settings.hideactive and not RABui_Preview then
 		barsToShow = {}; -- make separate list of bars to show
 		shownBarCount = 0;
 		for j = 1, RABui_BarCount do
@@ -179,16 +201,84 @@ function RABui_SyncBars()
 			RABui_ShowBarAtIndex(bar, shownBars);
 			local tex = getglobal("RAB_Bar" .. i .. "Tex");
 			local tex2 = getglobal("RAB_Bar" .. i .. "Tex2");
-			tex:SetTexture("Interface\\AddOns\\RABuffs\\bar.tga");
+			RABui_SetBarSize(bar, tex, tex2);
+			RABui_SetBarTexture(tex, RABui_Settings.barTexture);
 			tex:SetVertexColor(barsToShow[i].color[1], barsToShow[i].color[2], barsToShow[i].color[3]);
-			tex2:SetTexture("Interface\\AddOns\\RABuffs\\bar.tga");
+			RABui_SetBarTexture(tex2, RABui_Settings.barTexture);
 			tex2:SetVertexColor(barsToShow[i].color[1], barsToShow[i].color[2], barsToShow[i].color[3]);
 			RABui_SetBarText(i, barsToShow[i].label .. (barsToShow[i].extralabel == nil and "" or barsToShow[i].extralabel));
 		end
 	end
 
-	RABFrame:SetHeight(10 + shownBars * 12);
+	-- the window keeps its original 4 px margin each side of the bars, and the title its 7 px less
+	RABFrame:SetWidth(RABui_BarWidth() + 8);
+	RAB_Title:SetWidth(RABui_BarWidth() - 7);
+	RABFrame:SetHeight(10 + shownBars * RABui_BarHeight());
+	RABui_ApplyFrameStyle();
 	RABui_Settings_Layout_SyncList();
+end
+
+-- the bar height from the options page (12 is the original), kept within the slider's range
+function RABui_BarHeight()
+	local h = tonumber(RABui_Settings.barHeight) or 12;
+	return math.max(8, math.min(30, h));
+end
+
+-- the bar width from the options page (122 is the original), kept within the slider's range
+function RABui_BarWidth()
+	local w = tonumber(RABui_Settings.barWidth) or 122;
+	return math.max(60, math.min(300, w));
+end
+
+-- Sizes a bar and its two fill layers. The label is anchored to the bar's top, as in the XML; moving it
+-- down by half the extra height keeps it centred, and leaves it exactly where it was at 12.
+function RABui_SetBarSize(bar, tex, tex2)
+	local h, w = RABui_BarHeight(), RABui_BarWidth();
+	bar:SetHeight(h);
+	tex:SetHeight(h);
+	tex2:SetHeight(h);
+	if (bar:GetWidth() ~= w) then
+		bar:SetWidth(w);
+		RABui_DrawBarFill(bar);
+	end
+	local label = bar.GetFontString and bar:GetFontString();
+	if (label ~= nil) then
+		label:ClearAllPoints();
+		label:SetPoint("TOP", bar, "TOP", 0, -math.floor((h - 12) / 2));
+	end
+end
+
+-- Sets the fill widths from the bar's last values: Tex shows the buffs that aren't fading, Tex2 all of them.
+function RABui_DrawBarFill(bar)
+	if (bar.cur == nil or bar.max == nil or bar.max == 0) then
+		return;
+	end
+	local name, cur, fade = bar:GetName(), bar.cur, bar.fade or 0;
+	if (cur - fade > 0) then
+		getglobal(name .. "Tex"):SetWidth(bar:GetWidth() * (cur - fade) / bar.max);
+	else
+		getglobal(name .. "Tex"):SetWidth(0.01);
+	end
+	if (cur > 0) then
+		getglobal(name .. "Tex2"):SetWidth(bar:GetWidth() * cur / bar.max);
+	else
+		getglobal(name .. "Tex2"):SetWidth(0.01);
+	end
+end
+
+-- Points a bar texture at path, or at the default bar if path doesn't load. Whether SetTexture reports a
+-- missing file isn't documented, so the default (known to exist) is loaded first: if that call returns
+-- nothing, the return value means nothing and path is used as is. Returns false if path didn't load.
+function RABui_SetBarTexture(tex, path)
+	local reports = tex:SetTexture(RAB_DEFAULT_BAR_TEXTURE);
+	if (path == nil or path == "" or path == RAB_DEFAULT_BAR_TEXTURE) then
+		return true;
+	end
+	if (tex:SetTexture(path) or not reports) then
+		return true;
+	end
+	tex:SetTexture(RAB_DEFAULT_BAR_TEXTURE);
+	return false;
 end
 
 function RABui_UpdateBars()
@@ -248,16 +338,7 @@ function RABui_SetBarValue(barid, cur, fade, max)
 	local bar = getglobal("RAB_Bar" .. barid);
 	if (bar ~= nil and (cur ~= bar.cur or max ~= bar.max or fade ~= bar.fade)) then
 		bar.cur, bar.max, bar.fade = cur, max, fade;
-		if (cur - fade > 0) then
-			getglobal("RAB_Bar" .. barid .. "Tex"):SetWidth(bar:GetWidth() * (cur - fade) / max);
-		else
-			getglobal("RAB_Bar" .. barid .. "Tex"):SetWidth(0.01);
-		end
-		if (cur > 0) then
-			getglobal("RAB_Bar" .. barid .. "Tex2"):SetWidth(bar:GetWidth() * cur / max);
-		else
-			getglobal("RAB_Bar" .. barid .. "Tex2"):SetWidth(0.01);
-		end
+		RABui_DrawBarFill(bar);
 	end
 end
 
@@ -545,7 +626,10 @@ function RABui_BarOnClick()
 
 	local buffData = RAB_Buffs[RABui_Bars[id].buffKey];
 
-	if (arg1 == "LeftButton" and IsControlKeyDown()) then
+	if (arg1 == "RightButton") then
+		RAB_Tooltip:Hide();
+		ToggleDropDownMenu(1, nil, RAB_Menu, "cursor", -10, 8);
+	elseif (arg1 == "LeftButton" and IsControlKeyDown()) then
 		RAB_BuffCheckOutput(RABui_Bars[id], RABui_Bars[id].out ~= nil and RABui_Bars[id].out or "RAID", IsShiftKeyDown());
 	elseif (arg1 == "LeftButton" and buffData ~= nil) then
 		local doOut = true;
@@ -1430,11 +1514,46 @@ end
 function RABui_CreateBar(id)
 	local ptr = CreateFrame("Button", "RAB_Bar" .. id, RABFrame, "RAB_Bar");
 	ptr:SetID(id);
+	-- right-click opens the window menu; with the title bar hidden, the bars are the drag handle
+	ptr:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+	ptr:SetScript("OnDragStart", function()
+		if (RABui_Settings.hidetitle and RABui_Settings.lockwindow ~= true) then
+			RAB_Tooltip:Hide();
+			RABFrame:StartMoving();
+			RABFrame.isMoving = true;
+		end
+	end);
+	ptr:SetScript("OnDragStop", function()
+		if (RABFrame.isMoving) then
+			RABFrame:StopMovingOrSizing();
+			RABFrame.isMoving = false;
+		end
+	end);
 	return ptr;
 end
 
+-- the window options: title bar, and the background and border of the window's backdrop
+function RABui_ApplyFrameStyle()
+	if (RABui_Settings.hidetitle) then
+		RAB_Title:Hide();
+	else
+		RAB_Title:Show();
+	end
+	-- bars only take drags while the title is hidden, so with the title shown a click that moves a
+	-- little still casts
+	for i = 1, RABui_BarCount do
+		if (RABui_Settings.hidetitle) then
+			getglobal("RAB_Bar" .. i):RegisterForDrag("LeftButton");
+		else
+			getglobal("RAB_Bar" .. i):RegisterForDrag();
+		end
+	end
+	RABFrame:SetBackdropColor(1, 1, 1, RABui_Settings.hidebackground and 0 or 1);
+	RABFrame:SetBackdropBorderColor(1, 1, 1, RABui_Settings.hideborder and 0 or 1);
+end
+
 function RABui_ShowBarAtIndex(bar, index)
-	bar:SetPoint("TOPLEFT", RABFrame, "TOPLEFT", 4, -12 * (index - 1) - 5);
+	bar:SetPoint("TOPLEFT", RABFrame, "TOPLEFT", 4, -RABui_BarHeight() * (index - 1) - 5);
 	bar:Show();
 end
 

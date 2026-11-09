@@ -1,7 +1,7 @@
 ## Interface: 11200
 ## Title: RABuffs |cffc8a2c8(Requires Classic API)|r
 ## Author: pepopo978 & Heallios
-## Version: 0.13.0
+## Version: 0.13.1
 ## Notes: Requires the ClassicAPI DLL. Without it this addon does nothing.
 ## X-URL: https://github.com/KameleonUK/Rabuffs
 classicapi_required.lua

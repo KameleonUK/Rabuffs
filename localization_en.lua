@@ -145,6 +145,12 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
         "If unchecked, the \"CTRL+Click to ... SHIFT to invert\" line will not appear in bar tooltips.";
         sRAB_Settings_Option_lockwindow = "Lock UI position";
         sRAB_Settings_Option_lockwindow_Description = "Stops you from accidentally moving the RABuffs window.";
+        sRAB_Settings_Option_hidetitle = "Hide title bar";
+        sRAB_Settings_Option_hidetitle_Description = "Hides the title above the bars. Drag any bar to move the window, and right-click a bar for the menu.";
+        sRAB_Settings_Option_hidebackground = "Hide window background";
+        sRAB_Settings_Option_hidebackground_Description = "Makes the background behind the bars transparent.";
+        sRAB_Settings_Option_hideborder = "Hide window border";
+        sRAB_Settings_Option_hideborder_Description = "Hides the border round the bars.";
         sRAB_Settings_Option_colorizechat = "Color incoming <Buffs> messages";
         sRAB_Settings_Option_colorizechat_Description =
         "Colors player names rather than displaying their class as text in incoming <Buffs> messages.";

@@ -2,10 +2,30 @@
 --  Settings pages in Game Menu > AddOn Options (ClassicAPI's InterfaceOptions), built with ClassicAPIOptionsKit.
 --  They replace the old four-tab settings window. The bar layout editor and the query list are the same
 --  frames as before (RABuffs.xml), placed on the Bars and Buff list pages.
--- Version 0.13.0
+-- Version 0.13.1
 
 local Kit = ClassicAPIOptionsKit;
-local root, profilesPage;
+local root, profilesPage, textureProbe;
+
+-- Tidies a typed texture path: trims it, turns / into \, drops a .tga or .blp extension; empty means
+-- the default. A path that doesn't load is refused (the box goes back to the saved path) with a message.
+local function ParseTexture(text)
+	local path = string.gsub(string.gsub(text or "", "^%s+", ""), "%s+$", "");
+	path = string.gsub(path, "/", "\\");
+	path = string.gsub(string.gsub(path, "%.[Tt][Gg][Aa]$", ""), "%.[Bb][Ll][Pp]$", "");
+	if (path == "") then
+		return RAB_DEFAULT_BAR_TEXTURE;
+	end
+	if (textureProbe == nil) then
+		textureProbe = UIParent:CreateTexture(nil, "BACKGROUND");
+		textureProbe:Hide();
+	end
+	if (not RABui_SetBarTexture(textureProbe, path)) then
+		RAB_Print("[RABuffs] Couldn't load the texture " .. path .. ". Check the path; a file added while the game is running needs a client restart.", "warn");
+		return nil;
+	end
+	return path;
+end
 
 -- what a settings checkbox did in the old window: re-check when the window should show, redraw the bars
 local function ApplySettings()
@@ -55,9 +75,22 @@ local function ProfileOptions()
 	return options;
 end
 
+local function PreviewButton(page)
+	page:Button({
+		label = "Preview bar window",
+		tooltip = "Shows the bar window with every bar until you close this window, whatever the group, combat and hide-active settings say. Use it to see appearance changes.",
+		onClick = RABui_StartPreview,
+	});
+end
+
 function RAB_Options_Build()
 	if (root ~= nil) then
 		return;
+	end
+	-- the preview ends when the options window closes: a child frame's OnHide runs when its parent hides
+	if (InterfaceOptionsFrame ~= nil) then
+		local watcher = CreateFrame("Frame", nil, InterfaceOptionsFrame);
+		watcher:SetScript("OnHide", function() RABui_EndPreview(); end);
 	end
 	local bind = Kit.Binder(
 			function() return RABui_Settings end,
@@ -82,14 +115,38 @@ function RAB_Options_Build()
 		min = 0.2, max = 2, step = 0.1,
 		format = function(v) return string.format("%.1f s", v) end,
 	});
-	root:Button({
-		label = "Show bar window",
-		onClick = function()
-			RABui_UpdateBars();
-			RABFrame:Show();
-		end,
-	});
+	PreviewButton(root);
 	root:Text("Slash commands: /rab show, /rab hide, /rab info, /rab versioncheck, /rab profile, and /rabq for buff queries.");
+
+	-- Appearance: how the bar window looks
+	local appearance = Kit:NewPage({ name = "Appearance", parent = "RABuffs", subtitle = "How the bar window and its bars look.", bind = bind });
+	PreviewButton(appearance);
+	appearance:Header("Window");
+	Option(appearance, "hidetitle");
+	Option(appearance, "hidebackground");
+	Option(appearance, "hideborder");
+	appearance:Header("Bars");
+	appearance:EditBox({
+		key = "barTexture",
+		label = "Bar texture",
+		tooltip = "Path to the texture drawn on every bar, without the extension, for example Interface\\TargetingFrame\\UI-StatusBar. Bar colours are applied on top, so light or grey textures work best. Leave it empty for the RABuffs default.",
+		width = 360,
+		parse = ParseTexture,
+	});
+	appearance:Slider({
+		key = "barHeight",
+		label = "Bar height",
+		tooltip = "Height of each bar in pixels. 12 is the original size; the label stays centred and the window grows to fit.",
+		min = 8, max = 30, step = 1,
+		format = function(v) return string.format("%d px", v) end,
+	});
+	appearance:Slider({
+		key = "barWidth",
+		label = "Bar width",
+		tooltip = "Width of each bar in pixels. 122 is the original size; the window and title bar resize to match.",
+		min = 60, max = 300, step = 2,
+		format = function(v) return string.format("%d px", v) end,
+	});
 
 	-- Buffing
 	local buffing = Kit:NewPage({ name = "Buffing", parent = "RABuffs", subtitle = "How clicking a bar casts buffs.", bind = bind });

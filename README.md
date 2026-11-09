@@ -9,7 +9,7 @@ This build of RABuffs requires the [ClassicAPI](https://github.com/brues-code/Cl
 - **Casting never touches your target.** Buffs, resurrects and soulstones go straight to the chosen player (`C_Spell.CastAtUnit`, `C_Item.UseAtUnit`); range comes from `C_Spell.IsSpellInRange`. Greater Blessings, Gift of the Wild and other group buffs are found by name, so they cast reliably.
 - **Fewer false warnings.** No "on cooldown" message during the global cooldown, a clear message when a spell can't be used, and feigning hunters are no longer counted as dead.
 - **New debuff bars.** Magic Debuffs, Curses, Poisons, Diseases and Debuffs I Can Cure, under the *Debuffs* group in the bar editor.
-- **AddOn Options pages.** Game Menu > AddOn Options > RABuffs has five pages: RABuffs (bar window), Buffing, Profiles, Bars and Buff list. They replace the old settings window; `/rab` opens them.
+- **AddOn Options pages.** Game Menu > AddOn Options > RABuffs has six pages: RABuffs (bar window), Appearance, Buffing, Profiles, Bars and Buff list. They replace the old settings window; `/rab` opens them.
 - **Live tooltips.** Pressing or releasing Shift or Alt over a bar redraws its tooltip straight away.
 - **Fixes.** Text reports from `/rabq` and Ctrl-click work in a party, bars whose query no longer exists are dropped instead of breaking the window, the "Self only" checkbox works for every bar, the health query reports correctly, and a number of leaked globals are gone. The 30-second raid buff broadcast and its hidden chat channel were removed; version checks still work by whisper.
 
@@ -19,6 +19,7 @@ Extract the release zip into `Interface\AddOns` (it contains the `Rabuffs` folde
 
 ### Version history
 
+- **0.13.1** - New Appearance options page: bar texture (any texture path), bar height and bar width, and separate tick boxes to hide the title bar, the window background and the window border. With the title bar hidden, drag any bar to move the window. Right-clicking a bar opens the window menu. "Preview bar window" shows the window and every bar while the options are open, whatever the group, combat and hide-active settings.
 - **0.13.0** - First ClassicAPI edition (everything above).
 
 ## WARNING

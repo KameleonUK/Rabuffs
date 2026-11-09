@@ -4,13 +4,21 @@
 
 RAB_Lock = 1;
 
-RABuffs_Version = "0.13.0";
-RABuffs_DeciVersion = 0.130000;
+RABuffs_Version = "0.13.1";
+RABuffs_DeciVersion = 0.131000;
+
+RAB_DEFAULT_BAR_TEXTURE = "Interface\\AddOns\\Rabuffs\\bar";
 
 RABui_Settings = {};
 RABui_DefSettings = {
 	Layout = {},
 	updateInterval = 0.5,
+	barTexture = RAB_DEFAULT_BAR_TEXTURE,
+	barHeight = 12,
+	barWidth = 122,
+	hidetitle = false,
+	hidebackground = false,
+	hideborder = false,
 	firstRun = true,
 	currentProfileByChar = {},
 	enableGreeting = true,
