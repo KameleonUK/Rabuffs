@@ -1,6 +1,6 @@
 -- RABuffs_ctra.lua
 --  Handles interaction between RABuffs and CTRA, including minimalistic handling of CTRA messages.
--- Version 0.10.1
+-- Version 0.13.0
 
 RAB_CTRA_NativeHandlerAddon = "CT_RaidAssist";
 RAB_CTRA_ResponsibleHandler = "RAB";
@@ -46,8 +46,9 @@ end
 function RAB_CTRA_IsMT(name) -- Determines if unit is an MT.
     local key, val;
     if (RAB_CTRA_ResponsibleHandler == "CTRA") then
-        for key, val in CT_RA_MainTanks do
-            if (key == name) then
+        -- CTRA keys main tanks by position and stores the names as values
+        for key, val in (CT_RA_MainTanks or {}) do
+            if (val == name) then
                 return true;
             end
         end
@@ -60,12 +61,12 @@ end
 function RAB_CTRA_IsBeingRessed(name)
     local key, val;
     if (RAB_CTRA_ResponsibleHandler == "CTRA") then
-        for key, val in CT_RA_Ressers do
+        for key, val in (CT_RA_Ressers or {}) do
             if (val == name) then
                 return true;
             end
         end
-        for key, val in CT_RA_Stats do
+        for key, val in (CT_RA_Stats or {}) do
             if (key == name and val["Ressed"] == 1) then
                 return true;
             end
@@ -93,7 +94,7 @@ end
 
 function RAB_CTRA_IsAFK(name)
     if (RAB_CTRA_ResponsibleHandler == "CTRA") then
-        if (CT_RA_Stats[name] ~= nil and CT_RA_Stats[name]["AFK"] ~= nil) then
+        if (CT_RA_Stats ~= nil and CT_RA_Stats[name] ~= nil and CT_RA_Stats[name]["AFK"] ~= nil) then
             return true;
         end
     end
@@ -101,5 +102,4 @@ function RAB_CTRA_IsAFK(name)
 end
 
 RAB_Core_Register("ADDON_LOADED", "ctraLoad", RAB_CTRA_CheckLoad);
-RAB_Core_Register("CHAT_MSG_CHANNEL", "ctraFilter", RAB_CTRA_ChannelEvent);
 RAB_Core_Register("CHAT_MSG_ADDON", "ctraBuffTimers", RAB_CTRA_AddOnEvent);

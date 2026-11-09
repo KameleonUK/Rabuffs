@@ -1,6 +1,6 @@
 -- RABuffs_vui.lua
 --  Handles the visual user interface as well as event-triggered routines.
--- Version 0.10.1
+-- Version 0.13.0
 
 RABui_BarCount = 0;
 RABui_Settings_TabCount = 4;
@@ -11,7 +11,6 @@ RABui_MenuBar = nil;    -- Bar ID of the bar menu bar.
 RABui_LastBuffEvent = 0;
 RABui_UpdateId = 0;
 RABui_NextUpdate = 0;
-RABui_LastShiftState = 0; -- Shift*1+Alt*2
 
 RAB_BarDetail_SelectedGroups = { true, true, true, true, true, true, true, true };
 RAB_BarDetail_SelectedClasses = {
@@ -47,6 +46,8 @@ StaticPopupDialogs["RAB_BARDETAIL_OUT_WHISPERTARGET"] = {
 function RABui_OnLoad()
 	this:RegisterEvent("PLAYER_ENTERING_WORLD");
 	this:RegisterEvent("LEARNED_SPELL_IN_TAB");
+	-- ClassicAPI event: redraw the open bar tooltip the moment Shift (invert) or Alt (group buff) changes
+	this:RegisterEvent("MODIFIER_STATE_CHANGED");
 
 	-- StaticPopup
 	StaticPopupDialogs["RAB_BARDETAIL_OUT_WHISPERTARGET"].EditBoxOnEnterPressed = RABui_BarDetail_WhisperAccept;
@@ -54,33 +55,29 @@ function RABui_OnLoad()
 end
 
 function RABui_OnEvent()
-	local i, j;
+	if (RABUFFS_CLASSICAPI_MISSING) then
+		return;
+	end
 
 	if (event == "PLAYER_ENTERING_WORLD") then
 		if (RAB_Lock ~= 0) then
 			RAB_Lock = 0;
-			RABui_UpdateBars();
 			sRAB_Localize(false, true);
+			RABui_UpdateBars();
 		end
 
-		RABui_Settings_SelectUTab(1);
 		if (RAB_LoadShow == "welcome") then
-			ShowUIPanel(RAB_SettingsFrame);
-			RABui_Settings_SelectTab(1);
-			RABui_Settings_SelectUTab(2);
 			RABui_IsUIShown = true;
 			RABFrame:Show();
-		elseif (RAB_LoadShow == "changelog") then
-			ShowUIPanel(RAB_SettingsFrame);
-			RABui_Settings_SelectTab(1);
-			RABui_Settings_SelectUTab(3);
-		elseif (RAB_LoadShow == "versionwarn") then
-			StaticPopup_Show("RAB_MSG");
 		end
 		RAB_LoadShow = "";
 		this:UnregisterEvent("PLAYER_ENTERING_WORLD");
 	elseif (event == "LEARNED_SPELL_IN_TAB") then
 		sRAB_Localize(false, true);
+	elseif (event == "MODIFIER_STATE_CHANGED") then
+		if (RABui_TooltipBar ~= nil and RABui_TooltipBar ~= 0 and RAB_Tooltip:IsShown()) then
+			RABui_UpdateTooltip(RABui_TooltipBar);
+		end
 	end
 end
 
@@ -118,23 +115,25 @@ end
 
 function RABui_Load()
 	sRAB_Localize(true, false);
-	if (RAB_ChatFrame_OnEvent ~= nil) then
+	RAB_Loaded();
+	-- ClassicAPI has no chat message filter, so ChatFrame_OnEvent is still wrapped; only ever once
+	if (RAB_RealChatFrame_OnEvent == nil) then
 		RAB_RealChatFrame_OnEvent = ChatFrame_OnEvent;
 		ChatFrame_OnEvent = RAB_ChatFrame_OnEvent;
 	end
 
+	RAB_Options_Build();
 	RABui_SyncBars();
 	if (RABui_Settings.enableGreeting) then
 		RAB_Print(string.format(sRAB_Greeting, RABuffs_Version), "ok");
 	end
 
-	RAB_Settings_BL_Update();
 	if (RABui_IsUIShown == false) then
 		RABui_Hide();
 	end
 
-	GameTooltip.SetUnitBuffOrig = GameTooltip.SetUnitBuff;
-	GameTooltip.SetUnitBuff = RABui_GameTooltip_SetUnitBuff;
+	-- a post-hook keeps the engine's own arguments and other addons' hooks intact
+	hooksecurefunc(GameTooltip, "SetUnitBuff", RABui_GameTooltip_SetUnitBuff);
 
 	return "remove";
 end
@@ -292,8 +291,7 @@ function RABui_Menu_Initialize()
 		text = sRAB_Menu_Settings,
 		notCheckable = 1,
 		func = function()
-			RABui_Settings_SelectTab(1);
-			ShowUIPanel(RAB_SettingsFrame);
+			RAB_OpenOptions();
 		end
 	});
 	UIDropDownMenu_AddButton({ text = "", disabled = 1, notCheckable = 1 });
@@ -301,70 +299,10 @@ function RABui_Menu_Initialize()
 		text = "Current Profile: " .. (RAB_GetCurrentProfile()),
 		isTitle = 1
 	});
-	UIDropDownMenu_AddButton({
-		text = "Create New Profile...",
-		notCheckable = 1,
-		func = function()
-			StaticPopup_Show("RAB_PROFILE_CREATE_PROMPT");
-		end
-	});
-	UIDropDownMenu_AddButton({
-		text = "Save New Profile...",
-		notCheckable = 1,
-		func = function()
-			StaticPopup_Show("RAB_PROFILE_SAVE_PROMPT");
-		end
-	});
-	UIDropDownMenu_AddButton({
-		text = "Export Profile...",
-		notCheckable = 1,
-		func = function()
-			RAB_ExportedProfileData = RAB_ExportProfile();
-			if RAB_ExportedProfileData then
-				StaticPopup_Show("RAB_PROFILE_EXPORT");
-			end
-		end
-	});
-	UIDropDownMenu_AddButton({
-		text = "Import Profile...",
-		notCheckable = 1,
-		func = function()
-			StaticPopup_Show("RAB_PROFILE_IMPORT_DATA");
-		end
-	});
 
-	-- Add delete current profile option
+	-- Load entries stay here for quick switching mid-raid; managing profiles is on the Profiles options page
 	local profiles = RAB_GetAllProfiles();
 	local current = RAB_GetCurrentProfile();
-	local profileCount = table.getn(profiles);
-
-	-- Add default if not in list for counting
-	local hasDefault = false;
-	for i, profile in ipairs(profiles) do
-		if profile == "Default" then
-			hasDefault = true;
-			break ;
-		end
-	end
-	if not hasDefault then
-		profileCount = profileCount + 1;
-	end
-
-	-- Only show delete option if more than 1 profile exists and current profile is not Default
-	if profileCount > 1 and current ~= "Default" then
-		UIDropDownMenu_AddButton({
-			text = "Delete Current Profile (" .. current .. ")",
-			notCheckable = 1,
-			func = function()
-				RAB_ProfileToDelete = current;
-				StaticPopup_Show("RAB_PROFILE_DELETE_CONFIRM", current);
-			end
-		});
-	end
-
-	-- Add profile load options directly
-	profiles = RAB_GetAllProfiles();
-	current = RAB_GetCurrentProfile();
 
 	-- Always include Default
 	local hasDefault = false;
@@ -387,6 +325,9 @@ function RABui_Menu_Initialize()
 			func = function()
 				if RAB_LoadProfile(profileName) then
 					CloseDropDownMenus();
+					if RAB_Options_RefreshProfiles then
+						RAB_Options_RefreshProfiles();
+					end
 				end
 			end
 		});
@@ -403,6 +344,9 @@ function RABui_MoveBar(barid, direction)
 end
 
 function RABui_OnUpdate(elapsed)
+	if (RABUFFS_CLASSICAPI_MISSING) then
+		return;
+	end
 	local i;
 
 	if (RABui_NextUpdate < GetTime()) then
@@ -414,13 +358,6 @@ function RABui_OnUpdate(elapsed)
 		end
 		RABui_NextUpdate = GetTime() + RABui_Settings.updateInterval;
 	end
-	-- local shiftstate = (IsShiftKeyDown() and 1 or 0) + (IsAltKeyDown() and 2 or 0);
-	-- if (shiftstate ~= RABui_LastShiftState) then
-	-- 	RABui_LastShiftState = shiftstate;
-	-- 	if (RABui_TooltipBar ~= nil and RABui_TooltipBar ~= 0) then
-	-- 		RABui_UpdateTooltip(RABui_TooltipBar);
-	-- 	end
-	-- end
 end
 
 function RABui_UpdateBar(barid)
@@ -462,7 +399,7 @@ function RABui_UpdateTooltip(id)
 	RAB_Tooltip:SetOwner(RABFrame, "ANCHOR_LEFT");
 	RABui_TooltipBar = id;
 
-	local index, info, l;
+	local index, info, l, line;
 	local info;
 
 	local buffData = RAB_Buffs[RABui_Bars[id].buffKey];
@@ -633,6 +570,7 @@ function RABui_BarDetail_SetBarData(id)
 		RAB_BarDetail_Output = "RAID";
 		RAB_BarDetail_UseOnClick:SetChecked(true);
 		RAB_BarDetail_SelfLimit:SetChecked(false);
+		RAB_BarDetail_SelfLimit:Enable();
 	else
 		RAB_BarDetail_Header:SetText(sRAB_AddBarFrame_EditBar);
 		RAB_BarDetail_Accept:SetText(sRAB_AddBarFrame_Edit);
@@ -649,9 +587,11 @@ function RABui_BarDetail_SetBarData(id)
 
 		local buffData = RAB_Buffs[buffKey];
 
-		-- if type is selfbuffonly/wepbuffonly disable the checkbutton
-		if buffData and buffData.type == 'selfbuffonly' or buffData.type == 'wepbuffonly' then
+		-- selfbuffonly/wepbuffonly buffs are always self only; enable the checkbox again for every other bar
+		if buffData and (buffData.type == 'selfbuffonly' or buffData.type == 'wepbuffonly') then
 			RAB_BarDetail_SelfLimit:Disable();
+		else
+			RAB_BarDetail_SelfLimit:Enable();
 		end
 
 		RAB_BarDetail_UseOnClick:SetChecked(RABui_Bars[id].useOnClick);
@@ -694,10 +634,10 @@ function RABui_BarDetail_SetBarData(id)
 	elseif (RAB_BarDetail_Output == "OFFICER") then
 		outtext = sRAB_Settings_BarDetail_Output_Officer;
 	elseif (string.find(RAB_BarDetail_Output, "^CHANNEL:") ~= nil) then
-		_, _, n = string.find(RAB_BarDetail_Output, "^CHANNEL:(.+)");
+		local _, _, n = string.find(RAB_BarDetail_Output, "^CHANNEL:(.+)");
 		outtext = n;
 	elseif (string.find(RAB_BarDetail_Output, "^WHISPER:") ~= nil) then
-		_, _, n = string.find(RAB_BarDetail_Output, "^WHISPER:(.+)");
+		local _, _, n = string.find(RAB_BarDetail_Output, "^WHISPER:(.+)");
 		outtext = n ..
 				sRAB_Settings_BarDetail_Output_WhisperSuffix;
 		UIDropDownMenu_SetSelectedValue(RAB_BarDetail_OutputTarget,
@@ -916,8 +856,8 @@ function RABui_BarDetail_OutputTarget_Initialize()
 		});
 	elseif (UIDROPDOWNMENU_MENU_VALUE == "CHANNEL") then
 		for i = 1, 10 do
-			id, name = GetChannelName(i);
-			if (name ~= nil and name ~= RAB_gSync_Channel and name ~= CT_RA_Channel and name ~= DamageMeters_syncChannel and string.find(name, " ") == nil) then
+			local id, name = GetChannelName(i);
+			if (name ~= nil and name ~= CT_RA_Channel and name ~= DamageMeters_syncChannel and string.find(name, " ") == nil) then
 				UIDropDownMenu_AddButton({
 					text = name,
 					value = "CHANNEL:" .. name,
@@ -947,14 +887,33 @@ function RABui_BarDetail_WhisperAccept(pa1, pa2, pa3)
 	end
 end
 
+-- Adds "Time left" to buff tooltips. The native buff index doesn't match C_UnitAuras' index, so the aura
+-- is found by the name the tooltip just showed.
 function RABui_GameTooltip_SetUnitBuff(obj, unit, bId)
-	obj.SetUnitBuffOrig(obj, unit, bId);
-	local tex = tostring(RAB_TextureToBuff(tostring(UnitBuff(unit, bId))));
-	if (RAB_BuffTimers ~= nil and RAB_BuffTimers[UnitName(unit) .. "." .. tex] ~= nil) then
-		local tLeft = RAB_BuffTimers[UnitName(unit) .. "." .. tex] - GetTime();
-		if (tLeft > 0) then
-			obj:AddLine(string.format(sRAB_Tooltip_TimeLeft, RAB_TimeFormatOffset(tLeft)));
+	if (obj ~= GameTooltip or unit == nil) then
+		return;
+	end
+	local name = GameTooltipTextLeft1:GetText();
+	if (name == nil) then
+		return;
+	end
+	local aura = C_UnitAuras.GetAuraDataBySpellName(unit, name, "HELPFUL");
+	if (aura == nil) then
+		return;
+	end
+	local expires = aura.expirationTime or 0;
+	if (expires == 0) then
+		-- fall back to a CTRA timer for this buff, if one was received
+		local icon = string.gsub(aura.icon or "", "^.*\\", "");
+		local key = RAB_AuraToBuff({ name = aura.name, lname = strlower(aura.name), tex = strlower(icon), spellId = aura.spellId });
+		if (key ~= nil and RAB_BuffTimers[UnitName(unit) .. "." .. key] ~= nil) then
+			expires = RAB_BuffTimers[UnitName(unit) .. "." .. key];
 		end
+	end
+	local tLeft = expires - GetTime();
+	if (tLeft > 0) then
+		obj:AddLine(string.format(sRAB_Tooltip_TimeLeft, RAB_TimeFormatOffset(tLeft)));
+		obj:Show();
 	end
 end
 
@@ -973,10 +932,11 @@ function RABui_AddFrameDropDown_Prepare()
 			if (val.grouping ~= nil) then
 				buffs[id].grouping = val.grouping;
 			end
-			if (val.type == "special") then
+			if (val.description ~= nil) then
 				buffs[id].tooltip = val.description;
 				buffs[id].tooltitle = val.name;
-			elseif (val.type == "debuff") then
+			end
+			if (val.type == "debuff") then
 				buffs[id].grouping = "Debuff";
 			end
 			id = id + 1;
@@ -1021,7 +981,7 @@ function RABui_BarDetail_BuffType_Initialize()
 	else
 		for key, val in RAB_ADFDD_Buffs do
 			if (val.grouping == UIDROPDOWNMENU_MENU_VALUE) then
-				ischeck = nil;
+				local ischeck = nil;
 				if (val.key == RAB_BarDetail_SelectedType) then
 					ischeck = 1;
 				end
@@ -1086,7 +1046,7 @@ function RABui_AddBar_Accept()
 	end
 end
 
-function split(str, delimiter)
+local function split(str, delimiter)
 	local result = {}
 	for token in string.gfind(str, "([^" .. delimiter .. "]+)") do
 		table.insert(result, token)
@@ -1145,77 +1105,6 @@ function RABui_AddBar(buffKey, selfLimit, groups, classes, barlabel, barpriority
 	end
 end
 
-function RABui_SSH_Color(val)
-	val = string.gsub(val, "(%b[])",
-			function(a)
-				return strsub(a, 2, 1) == "|" and a or
-						(HIGHLIGHT_FONT_COLOR_CODE .. "[" .. strsub(a, 2, -2) .. "]" .. FONT_COLOR_CODE_CLOSE)
-			end);
-	val = string.gsub(val, "(%b{})",
-			function(a)
-				return strsub(a, 2, 1) == "|" and a or
-						("|cffC0C0C0" .. "[" .. strsub(a, 2, -2) .. "]" .. FONT_COLOR_CODE_CLOSE)
-			end);
-	val = string.gsub(val, "(%b_=)",
-			function(a)
-				return strsub(a, 2, 1) == "|" and a or
-						(HIGHLIGHT_FONT_COLOR_CODE .. strsub(a, 2, -2) .. FONT_COLOR_CODE_CLOSE)
-			end);
-	val = string.gsub(val, "(%b-+)",
-			function(a)
-				return strsub(a, 2, 1) == "|" and a or
-						(GREEN_FONT_COLOR_CODE .. strsub(a, 2, -2) .. FONT_COLOR_CODE_CLOSE)
-			end);
-	return val;
-end
-
-function RABui_Settings_SelectTab(id)
-	local obj = PanelTemplates_GetSelectedTab(RAB_SettingsFrame);
-	for i = 1, 4 do
-		if (i == id) then
-			getglobal("RAB_Settings_TabFrame" .. i):Show();
-			PanelTemplates_SelectTab(getglobal("RAB_SettingsFrameTab" .. i));
-		else
-			getglobal("RAB_Settings_TabFrame" .. i):Hide();
-			PanelTemplates_DeselectTab(getglobal("RAB_SettingsFrameTab" .. i));
-		end
-	end
-end
-
-function RABui_Settings_SelectUTab(id)
-	RAB_Settings_TabFrame1.selectedTab = id;
-	PanelTemplates_SelectTab(getglobal("RAB_Settings_TabFrame1Tab" .. id));
-	PanelTemplates_UpdateTabs(RAB_Settings_TabFrame1);
-	if (id == 1) then
-		RAB_Settings_Tab1HTML:SetText("<html><body><h1 align=\"center\">" ..
-				sRAB_Settings_UIHeader ..
-				"</h1>" ..
-				sRAB_Settings_Welcome ..
-				"<br/><br/>" .. sRAB_Settings_ReleaseNotes .. sRAB_Settings_Version .. "</body></html>");
-	elseif (id == 2) then
-		RAB_Settings_Tab1HTML:SetText(sRAB_IntroText);
-	elseif (id == 3) then
-		RAB_Settings_Tab1HTML:SetText(sRAB_ChangeLog2);
-	end
-	RAB_Settings_Tab1ScrollFrame:UpdateScrollChildRect();
-	RAB_Settings_Tab1ScrollFrame:SetVerticalScroll(0);
-end
-
-function RABui_Settings_ToggleOption(option)
-	if (RABui_Settings[option] ~= nil) then
-		RABui_Settings[option] = not RABui_Settings[option];
-	else
-		RAB_Print("ASSERT: Option '" .. option .. "' not set.", "warn");
-	end
-end
-
-function RABui_Settings_InitOption()
-	this.name = strsub(this:GetName(), strlen("RAB_Settings_") + 1);
-	getglobal(this:GetName() .. "Text"):SetText(getglobal("sRAB_Settings_Option_" .. this.name));
-	this.tooltipText = getglobal("sRAB_Settings_Option_" .. this.name .. "_Description");
-	this:SetChecked(RABui_Settings[this.name] and 1 or 0);
-end
-
 function RAB_Settings_BL_Init()
 	local key, val, i, sort;
 	RAB_BL_Buffs = {};
@@ -1236,13 +1125,13 @@ function RAB_Settings_BL_Init()
 	table.sort(RAB_BL_Buffs, function(a, b)
 		return a.sort2 < b.sort2
 	end);
-	os = "";
+	local lastSort = "";
 	i = 0;
 	while (i < table.getn(RAB_BL_Buffs)) do
 		i = i + 1;
-		if (RAB_BL_Buffs[i].sort ~= os) then
-			os = RAB_BL_Buffs[i].sort;
-			tinsert(RAB_BL_Buffs, i, "header:" .. os);
+		if (RAB_BL_Buffs[i].sort ~= lastSort) then
+			lastSort = RAB_BL_Buffs[i].sort;
+			tinsert(RAB_BL_Buffs, i, "header:" .. lastSort);
 		else
 			RAB_BL_Buffs[i] = RAB_BL_Buffs[i].key;
 		end
@@ -1301,7 +1190,7 @@ end
 function RAB_Settings_BL_Click()
 	local _, _, id = string.find(this:GetName(), "(%d+)$")
 	id = tonumber(id);
-	bkey = RAB_BL_Buffs[FauxScrollFrame_GetOffset(RAB_Settings_BuffListScrollBar) + id];
+	local bkey = RAB_BL_Buffs[FauxScrollFrame_GetOffset(RAB_Settings_BuffListScrollBar) + id];
 	RABui_Settings_BL_LockHighlightOn = bkey;
 	RAB_Settings_BL_Update();
 	RABui_Settings_BL_DetailFrame_SetBuff(bkey);
@@ -1311,17 +1200,18 @@ function RABui_Settings_BL_DetailFrame_SetBuff(buffKey)
 	local key, val, usedTextureSlots;
 	local buffData = RAB_Buffs[buffKey];
 	RAB_BuffDetail_Header:SetText(buffData.name);
-	RAB_BuffDetail_SummaryText:SetText(RAB_Settings_BL_BuffType(bkey) ..
+	RAB_BuffDetail_SummaryText:SetText(RAB_Settings_BL_BuffType(buffKey) ..
 			" " ..
-			(RAB_Buffs[bkey].grouping ~= nil and string.format(sRAB_Settings_BuffList_ToolTip_CastBy, (RAB_Chat_Colors[RAB_Buffs[bkey].grouping] ~= nil and RAB_Chat_Colors[RAB_Buffs[bkey].grouping] or NORMAL_FONT_COLOR_CODE) .. RAB_Buffs[bkey].grouping .. "|r") or ""));
+			(buffData.grouping ~= nil and string.format(sRAB_Settings_BuffList_ToolTip_CastBy, (RAB_Chat_Colors[buffData.grouping] ~= nil and RAB_Chat_Colors[buffData.grouping] or NORMAL_FONT_COLOR_CODE) .. buffData.grouping .. "|r") or ""));
 	usedTextureSlots = 0;
 	for _, identifier in ipairs(buffData.identifiers) do
 		if (identifier.texture) then
 			usedTextureSlots = usedTextureSlots + 1;
 			if (usedTextureSlots < 4) then
 				getglobal("RAB_BuffDetail_TexBut" .. usedTextureSlots .. "Tex"):SetTexture("Interface\\Icons\\" .. identifier.texture);
-				getglobal("RAB_BuffDetail_TexBut" .. usedTextureSlots).spellId = sRAB_SpellIDs
-				[(usedTextureSlots == 1 and buffKey or (buffData.bigcast ~= nil and buffData.bigcast or "dummy"))];
+				-- the icon's tooltip needs a spellbook slot; sRAB_SpellIDs holds spell IDs
+				local spellID = sRAB_SpellIDs[(usedTextureSlots == 1 and buffKey or (buffData.bigcast ~= nil and buffData.bigcast or "dummy"))];
+				getglobal("RAB_BuffDetail_TexBut" .. usedTextureSlots).spellSlot = spellID and FindSpellBookSlotByID(spellID) or nil;
 			end
 		end
 	end
@@ -1358,7 +1248,7 @@ function RABui_Settings_BL_DetailFrame_SetBuff(buffKey)
 		end
 		detail = detail .. "\n\n" .. string.format(sRAB_Settings_BuffList_Detail_Priority, pribuff);
 	end
-	if (buffData.bigcast ~= "") then
+	if (buffData.bigcast ~= nil) then
 		if (buffData.bigsort == "group") then
 			detail = detail .. "\n\n" .. string.format(sRAB_Settings_BuffList_Detail_Group, buffData.bigthreshold);
 		elseif (buffData.bigsort == "class") then
@@ -1495,63 +1385,6 @@ function RABui_Settings_Layout_ClearAllBars_Confirmed()
 	end
 end
 
-function RABui_Settings_localizationSelector_OnLoad()
-	UIDropDownMenu_Initialize(this, RABui_Settings_localizationSelector_Menu);
-	UIDropDownMenu_SetWidth(250, this);
-end
-
-function RABui_Settings_localizationSelector_Menu(level, key)
-	if (not level) then
-		level = 1;
-	end
-	if (level == 1) then
-		UIDropDownMenu_AddButton(
-				{ text = sRAB_Settings_Localization_vui, notCheckable = 1, value = "vui", hasArrow = 1 },
-				level);
-		UIDropDownMenu_AddButton(
-				{ text = sRAB_Settings_Localization_out, notCheckable = 1, value = "out", hasArrow = 1 },
-				level);
-	elseif (this.value == "vui" or this.value == "out") then
-		for key, val in sRAB_LOCALIZATION do
-			local s = strupper(key);
-			local uses, lang, author, desc = getglobal("sRAB_Localization_" .. s .. "_CAPABILITIES"),
-			getglobal("sRAB_Localization_" .. s .. "_NATIVE"), getglobal("sRAB_Localization_" .. s .. "_AUTHOR"),
-			getglobal("sRAB_Localization_" .. s .. "_DESCRIPTION");
-			if (string.find(uses, "|" .. this.value .. "|") ~= nil) then
-				UIDropDownMenu_AddButton(
-						{
-							text = lang,
-							value = key,
-							tooltipTitle = lang,
-							tooltipText = desc,
-							checked = (key == getglobal("sRAB_LOCALIZATION_" .. this.value) and 1 or 0),
-							arg1 = this.value,
-							arg2 = key,
-							func = RABui_Settings_localizationSelector_SetLocale
-						}, level);
-			end
-		end
-	end
-end
-
-function RABui_Settings_localizationSelector_SetLocale(element, locale)
-	if (element == "vui") then
-		RABui_Settings.uilocale = locale;
-	elseif (element == "out") then
-		RABui_Settings.outlocale = locale;
-	end
-	sRAB_Localize(true, false);
-	RABui_Settings_localizationSelector_UpdateText();
-	ToggleDropDownMenu(1, nil, RAB_Settings_localizationSelector);
-end
-
-function RABui_Settings_localizationSelector_UpdateText()
-	local a1, a2 = getglobal("sRAB_Localization_" .. strupper(sRAB_LOCALIZATION_vui) .. "_NATIVE"),
-	getglobal("sRAB_Localization_" .. strupper(sRAB_LOCALIZATION_out) .. "_NATIVE");
-	UIDropDownMenu_SetText(string.format(sRAB_Settings_Localization_TextFormat, a1, a2),
-			RAB_Settings_localizationSelector);
-end
-
 function RABui_UpdateTitle()
 	local currentProfile = RAB_GetCurrentProfile();
 	RAB_Title:SetText(sRAB_Settings_UIHeader .. ": " .. currentProfile .. "");
@@ -1564,24 +1397,12 @@ function RABui_Localize()
 	RAB_Settings_BarLine0Name:SetText(sRAB_Settings_BuffList_Name);
 	RAB_Settings_BarLine0Query:SetText(sRAB_Settings_BuffList_Query);
 	RAB_Settings_BarLine0Position:SetText(sRAB_Settings_BarList_Position);
-	RAB_SettingsTitleText:SetText(sRAB_Settings_UIHeader);
-	RAB_SettingsFrameTab1:SetText(sRAB_Settings_Tab1Overview);
-	RAB_SettingsFrameTab2:SetText(sRAB_Settings_TabBuffs);
-	RAB_SettingsFrameTab3:SetText(sRAB_Settings_TabLayout);
-	RAB_SettingsFrameTab4:SetText(sRAB_Settings_TabSettings);
-	RAB_Settings_TabFrame1Tab1:SetText(sRAB_Settings_Tab1Overview);
-	RAB_Settings_TabFrame1Tab2:SetText(sRAB_Settings_Tab1Welcome);
-	RAB_Settings_TabFrame1Tab3:SetText(sRAB_Settings_Tab1Changelog);
 	RAB_Settings_TabFrame2Header:SetText(sRAB_Settings_BuffList_Header);
 	RAB_Settings_TabFrame2Description:SetText(sRAB_Settings_BuffList_Description);
 	RAB_Settings_TabFrame3Header:SetText(sRAB_Settings_Layout_Header);
 	RAB_Settings_TabFrame3Description:SetText(sRAB_Settings_Layout_Description);
 	RAB_Settings_BarLine20:SetText(sRAB_Settings_Layout_AddNewBar);
 	RAB_Settings_ClearAllBars:SetText(sRAB_Settings_Layout_ClearAllBars);
-	RAB_Settings_TabFrame4Header:SetText(sRAB_Settings_Settings_Header);
-	RAB_Settings_TabFrame4Description:SetText(sRAB_Settings_Settings_Description);
-	RAB_Settings_Buffing:SetText(sRAB_Settings_Settings_Buffing);
-	RAB_Settings_VUIConfig:SetText(sRAB_Settings_Settings_VUIConfig);
 	RAB_BarDetail_LabelText:SetText(sRAB_Settings_BarDetail_Label);
 	RAB_BarDetail_QueryText:SetText(sRAB_Settings_BarDetail_Query);
 	RAB_BarDetail_OutputText:SetText(sRAB_Settings_BarDetail_OutputTarget);
@@ -1596,16 +1417,6 @@ function RABui_Localize()
 
 	RABui_UpdateTitle();
 	StaticPopupDialogs["RAB_BARDETAIL_OUT_WHISPERTARGET"].text = sRAB_Settings_BarDetail_WhisperPrompt;
-
-	PanelTemplates_UpdateTabs(RAB_Settings_TabFrame1);
-	PanelTemplates_UpdateTabs(RAB_SettingsFrame);
-	for i = 1, 4 do
-		if (i < 4) then
-			PanelTemplates_TabResize(0, getglobal("RAB_Settings_TabFrame1Tab" .. i));
-		end
-		PanelTemplates_TabResize(0, getglobal("RAB_SettingsFrameTab" .. i));
-	end
-	RABui_Settings_localizationSelector_UpdateText();
 end
 
 function RABui_BarRedraw()

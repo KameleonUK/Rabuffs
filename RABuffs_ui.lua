@@ -1,6 +1,6 @@
 -- RABuffs_ui.lua
 --  Handles command line user interaction and addon-to-addon / addon-to-people communications.
--- Version 0.10.1
+-- Version 0.13.0
 
 RAB_Sync_HideMasks = {
     "^<RAB> Version",
@@ -39,8 +39,8 @@ StaticPopupDialogs["RAB_PROFILE_DELETE_CONFIRM"] = {
         if RAB_ProfileToDelete then
             RAB_DeleteProfile(RAB_ProfileToDelete);
             RAB_ProfileToDelete = nil;
-            if RAB_Settings_ProfileSelector_UpdateText then
-                RAB_Settings_ProfileSelector_UpdateText();
+            if RAB_Options_RefreshProfiles then
+                RAB_Options_RefreshProfiles();
             end
         end
     end,
@@ -63,8 +63,8 @@ StaticPopupDialogs["RAB_PROFILE_CREATE_PROMPT"] = {
                 if RABui_UpdateTitle then
                     RABui_UpdateTitle();
                 end
-                if RAB_Settings_ProfileSelector_UpdateText then
-                    RAB_Settings_ProfileSelector_UpdateText();
+                if RAB_Options_RefreshProfiles then
+                    RAB_Options_RefreshProfiles();
                 end
             end
         end
@@ -77,8 +77,8 @@ StaticPopupDialogs["RAB_PROFILE_CREATE_PROMPT"] = {
                 if RABui_UpdateTitle then
                     RABui_UpdateTitle();
                 end
-                if RAB_Settings_ProfileSelector_UpdateText then
-                    RAB_Settings_ProfileSelector_UpdateText();
+                if RAB_Options_RefreshProfiles then
+                    RAB_Options_RefreshProfiles();
                 end
             end
             this:GetParent():Hide();
@@ -103,8 +103,8 @@ StaticPopupDialogs["RAB_PROFILE_SAVE_PROMPT"] = {
         if profileName and profileName ~= "" then
             if RAB_SaveProfile(profileName) then
                 RAB_SetCurrentProfile(profileName);
-                if RAB_Settings_ProfileSelector_UpdateText then
-                    RAB_Settings_ProfileSelector_UpdateText();
+                if RAB_Options_RefreshProfiles then
+                    RAB_Options_RefreshProfiles();
                 end
             end
         else
@@ -116,8 +116,8 @@ StaticPopupDialogs["RAB_PROFILE_SAVE_PROMPT"] = {
         if profileName and profileName ~= "" then
             if RAB_SaveProfile(profileName) then
                 RAB_SetCurrentProfile(profileName);
-                if RAB_Settings_ProfileSelector_UpdateText then
-                    RAB_Settings_ProfileSelector_UpdateText();
+                if RAB_Options_RefreshProfiles then
+                    RAB_Options_RefreshProfiles();
                 end
             end
             this:GetParent():Hide();
@@ -222,8 +222,8 @@ StaticPopupDialogs["RAB_PROFILE_IMPORT_NAME"] = {
                 if RAB_ImportProfile(profileName, RAB_ImportProfileData) then
                     RAB_SetCurrentProfile(profileName);
                     RAB_LoadProfile(profileName);
-                    if RAB_Settings_ProfileSelector_UpdateText then
-                        RAB_Settings_ProfileSelector_UpdateText();
+                    if RAB_Options_RefreshProfiles then
+                        RAB_Options_RefreshProfiles();
                     end
                 end
                 RAB_ImportProfileData = nil;
@@ -242,8 +242,8 @@ StaticPopupDialogs["RAB_PROFILE_IMPORT_NAME"] = {
                 if RAB_ImportProfile(profileName, RAB_ImportProfileData) then
                     RAB_SetCurrentProfile(profileName);
                     RAB_LoadProfile(profileName);
-                    if RAB_Settings_ProfileSelector_UpdateText then
-                        RAB_Settings_ProfileSelector_UpdateText();
+                    if RAB_Options_RefreshProfiles then
+                        RAB_Options_RefreshProfiles();
                     end
                 end
                 RAB_ImportProfileData = nil;
@@ -270,8 +270,8 @@ StaticPopupDialogs["RAB_PROFILE_IMPORT_CONFIRM"] = {
             if RAB_ImportProfile(RAB_ProfileToImport, RAB_ImportProfileData) then
                 RAB_SetCurrentProfile(RAB_ProfileToImport);
                 RAB_LoadProfile(RAB_ProfileToImport);
-                if RAB_Settings_ProfileSelector_UpdateText then
-                    RAB_Settings_ProfileSelector_UpdateText();
+                if RAB_Options_RefreshProfiles then
+                    RAB_Options_RefreshProfiles();
                 end
             end
             RAB_ProfileToImport = nil;
@@ -311,15 +311,14 @@ function RAB_Loaded()
         RABui_Settings.newestVersionRealm = GetCVar("realmName");
     end
 
-    local cltemp = sRAB_Localization_UI .. " / " .. sRAB_Localization_Output .. " / " .. sRAB_Localization_SpellLayer;
-
-    sRAB_Settings_Version = string.format(sRAB_Settings_Version,
-        GREEN_FONT_COLOR_CODE .. RABuffs_Version .. "|r" .. sRAB_Settings_VersionNewest, cltemp, GetLocale());
 end
 
 SLASH_RABUFFSQ1 = "/rq";
 SLASH_RABUFFSQ2 = "/rabq";
 SlashCmdList["RABUFFSQ"] = function(msg)
+    if (RABUFFS_CLASSICAPI_MISSING) then
+        return;
+    end
     msg = strlower(msg);
     RAB_Lock = 0;
     if (msg == "help" or msg == "") then
@@ -340,111 +339,41 @@ SlashCmdList["RABUFFSQ"] = function(msg)
     elseif (strsub(msg, 1, 7) == "officer") then
         target = "OFFICER";
         msg = strsub(msg, 9);
-    elseif (string.find(msg, "w (%a+) (.+)") ~= nil) then
-        _, _, target, msg = string.find(msg, "w (%a+) (.+)");
-    elseif (string.find(msg, "c (%w+) (.+)") ~= nil) then
-        _, _, target, msg = string.find(msg, "c (%w+) (.+)");
+    elseif (string.find(msg, "^w (%a+) (.+)") ~= nil) then
+        _, _, target, msg = string.find(msg, "^w (%a+) (.+)");
+    elseif (string.find(msg, "^c (%w+) (.+)") ~= nil) then
+        _, _, target, msg = string.find(msg, "^c (%w+) (.+)");
         target = "CHANNEL:" .. target;
     end
 
-    local invert = (string.find(msg, "not (.+)") ~= nil);
+    local invert = (string.find(msg, "^not (.+)") ~= nil);
     if (invert) then
-        _, _, msg = string.find(msg, "not (.+)");
+        _, _, msg = string.find(msg, "^not (.+)");
     end
 
-    if (string.find(msg, "^(%a+) ?([1-8]*) ?([mlprdhswa]*)$") ~= nil) then
-        RAB_BuffCheckOutput(msg, target, invert);
+    -- the query functions take a bar-shaped table, not the typed text
+    local userData = RAB_ParseQuery(msg);
+    if (userData ~= nil) then
+        RAB_BuffCheckOutput(userData, target, invert);
     else
         RAB_Print(sRAB_Slash_UnrecognizedQuery, "warn");
     end
-end
-SLASHHELP_RABUFFSQ = function(text)
-    if (RABui_Settings.syntaxhelp == false) then
-        return; -- Disabled this.
-    end
-
-    local key, val, i, pref;
-
-    text = strlower(text);
-    text = strsub(text, strlen("/rabq ") + 1); -- just the params
-    _, _, pref = string.find(text, "^(%a+) ");
-
-    if (pref ~= nil) then
-        pref = strlower(pref);
-        if (pref == "raid" or pref == "party" or pref == "officer") then
-            text = strsub(text, strlen(pref) + 2);
-        elseif (pref == "w" or pref == "c") then
-            _, _, val = string.find(text, "^" .. pref .. " (%w+) ");
-            if (val == nil) then
-                RAB_SSH_QueryO("target"); return;
-            else
-                text = strsub(text, strlen(pref) + strlen(val) + 3);
-            end
-        end
-
-        if (string.find(text, "^(%a+) ")) then
-            _, _, pref = string.find(text, "(%a+) ");
-            if (pref == "not") then
-                text = strsub(text, strlen(pref) + 2);
-                _, _, pref = string.find(text, "(%a+) ");
-            end
-            if (pref == nil) then
-                RAB_SSH_QueryO("buffquery"); return;
-            elseif (RAB_Buffs[pref] == nil) then
-                RAB_SSH_QueryO("buffqueryinvalid");
-                return;
-            else
-                text = strsub(text, strlen(pref) + 2);
-                local _, _, lg, lc = string.find(text, "(%d*)( ?%a*)");
-                if (lg == nil or (lg == "" and lc == "")) then
-                    RAB_SSH_QueryO("limits");
-                elseif (lc == "") then
-                    RAB_SSH_QueryO("limitg");
-                else
-                    RAB_SSH_QueryO("limitc");
-                end
-                return true;
-            end
-        else
-            RAB_SSH_QueryO("buffquery"); return true;
-        end
-    else
-        RAB_SSH_QueryO("target");
-    end
-    return true;
-end
-function RAB_SSH_QueryO(item)
-    local key, val, spaceprefix = 0, 0, "";
-    if (sRAB_Slash_QSyntaxHelp[item] ~= nil) then
-        for key, val in sRAB_Slash_QSyntaxHelp[item] do
-            if (key == 1 and string.find(val, "(%b-+)") ~= nil) then -- title, must have a green part to align stuff after
-                local _, _, highlight = string.find(val, "(%b-+)");
-                spaceprefix = "         ";
-            elseif (string.find(val, "(%b_=)") ~= nil and spaceprefix ~= "") then
-                local _, _, highlight = string.find(val, "(%b_=)");
-                val = string.gsub(val, "^(%b_=)", "_" .. spaceprefix .. strsub(highlight, 2, -2) .. "=");
-            end
-            SlashHelp_AddLine(RABui_SSH_Color(val));
-        end
-    else
-        SlashHelp_AddLine("[qo error: missing '" .. item .. "']")
-    end
-    return true;
 end
 
 SLASH_RABUFFS1 = "/rab";
 SLASH_RABUFFS2 = "/rabuffs";
 SlashCmdList["RABUFFS"] = function(msg)
-    local target = "";
-    local out = "";
-    local obuff = "";
-
+    if (RABUFFS_CLASSICAPI_MISSING) then
+        return;
+    end
     local _, _, cmd, param = string.find(msg, "(%a+) (.+)");
     if (cmd == nil) then
         cmd = msg;
     end
+    cmd = strlower(cmd);
 
     if (msg == "") then
+        RAB_OpenOptions();
         for key, val in sRAB_Slash_Help do
             RAB_Print(val);
         end
@@ -454,6 +383,9 @@ SlashCmdList["RABUFFS"] = function(msg)
     elseif (cmd == "hide") then
         RABFrame:Hide();
         RAB_Print(sRAB_Menu_HiddenWindow);
+    elseif (cmd == "info") then
+        RAB_Lock = 0;
+        RAB_BuffCheckOutput(RAB_ParseQuery("info"), "CONSOLE");
     elseif (cmd == "versioncheck") then
         if (param == "") then
             param = nil;
@@ -477,27 +409,19 @@ SlashCmdList["RABUFFS"] = function(msg)
         else
             RAB_Print(sRAB_VersionCheck_NotInGroup, "warn");
         end
-    elseif (cmd == "hookchat") then
-        if (RAB_RealChatFrame_OnEvent == nil) then
-            RAB_RealChatFrame_OnEvent = ChatFrame_OnEvent;
-            ChatFrame_OnEvent = RAB_ChatFrame_OnEvent;
-        else
-            ChatFrame_OnEvent = RAB_RealChatFrame_OnEvent;
-            RAB_RealChatFrame_OnEvent = nil;
-        end
-        RAB_Print("[RABuffs] " .. ((RAB_RealChatFrame_OnEvent == nil) and "Unhooked" or "Hooked") .. " chatframe events.");
-    elseif (string.find(cmd, "^regtest") ~= nil) then
+    elseif (cmd == "regtest") then
         RAB_Print("[RABuffs] Performing query test.");
         local pass, fail, m = 0, 0, gcinfo();
         for key, val in RAB_Buffs do
-            ok, res = pcall(RAB_CallRaidBuffCheck, key, false, false);
+            local userData = { buffKey = key, groups = "", classes = "", selfLimit = false, excludeNames = {} };
+            local ok, res = pcall(RAB_CallRaidBuffCheck, userData, false, false);
             if (not ok) then
                 RAB_Print("[RABuffs] " .. key .. " failed: " .. tostring(res), "warn");
                 fail = fail + 1;
             else
                 local m2 = gcinfo();
                 for i = 1, 100 do
-                    RAB_CallRaidBuffCheck(key, false, false);
+                    RAB_CallRaidBuffCheck(userData, false, false);
                 end
                 pass = pass + 1;
                 if (gcinfo() - m2 > 0) then
@@ -518,7 +442,7 @@ SlashCmdList["RABUFFS"] = function(msg)
             if (subcmd == nil) then
                 subcmd = param;
             end
-            
+
             if (subcmd == "list") then
                 local profiles = RAB_GetAllProfiles();
                 local current = RAB_GetCurrentProfile();
@@ -542,40 +466,13 @@ SlashCmdList["RABUFFS"] = function(msg)
             else
                 RAB_Print("Usage: /rab profile <save|load|delete|list|current> [name]", "warn");
             end
+            if (RAB_Options_RefreshProfiles) then
+                RAB_Options_RefreshProfiles();
+            end
         end
     else
         RAB_Print(sRAB_Slash_UnrecognizedCommand, "warn");
     end
-end
-SLASHHELP_RABUFFS = function(text)
-    text = strlower(text);
-    if (RABui_Settings.syntaxhelp == false) then
-        return; -- Disabled this.
-    end
-    local ckey, ckeyl, i, key, val = 0, 0;
-    for key, val in sRAB_Slash_SyntaxHelp do
-        if (string.find(text, val[1]) ~= nil and strlen(val[1]) > ckeyl) then
-            ckey = key; ckeyl = strlen(val[1]);
-        end
-    end
-    if (ckey == 0) then
-        return;
-    end
-
-    local th, hlen, obj, spaceprefix = 0, 0, 0, "";
-    for key, val in sRAB_Slash_SyntaxHelp[ckey] do
-        if (key ~= 1) then
-            if (key == 2) then -- title, must have a green part to align stuff after
-                local _, _, highlight = string.find(val, "(%b-+)");
-                spaceprefix = "         ";
-            elseif (string.find(val, "(%b_=)") ~= nil) then
-                local _, _, highlight = string.find(val, "(%b_=)");
-                val = string.gsub(val, "(%b_=)", "_" .. spaceprefix .. strsub(highlight, 2, -2) .. "=");
-            end
-            SlashHelp_AddLine(RABui_SSH_Color(val));
-        end
-    end
-    return true;
 end
 
 function RAB_ChatFrame_OnEvent(poparg1, poparg2) -- Hiding RABuffs Chat / Whispers
@@ -613,4 +510,5 @@ function RAB_UpdatePeople(nick, display, version)
     end
 end
 
-RAB_Core_Register("PLAYER_LOGIN", "load", RAB_Loaded);
+-- RAB_Loaded runs from RABui_Load (RABuffs_vui.lua), after the strings are loaded: two PLAYER_LOGIN
+-- subscribers fire in no fixed order, and the update message needs sRAB_UpdateComplete.

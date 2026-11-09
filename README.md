@@ -1,9 +1,32 @@
-# WARNING
+# RABuffs (ClassicAPI edition)
+
+This build of RABuffs requires the [ClassicAPI](https://github.com/brues-code/ClassicAPI) DLL for the 1.12.1 client (Turtle WoW). Without the DLL it does nothing except print a line at login saying it needs ClassicAPI; your saved bars and profiles are left untouched.
+
+## ClassicAPI edition
+
+- **Buffs are read directly.** Bars count auras with `C_UnitAuras.UnitAura`, matched by spell ID or by name and icon, and update the moment a buff lands or drops. SuperWoW and the hidden-tooltip scans are no longer needed.
+- **Real fading times.** The recast window and the "time left" in bar and unit-frame tooltips come from each aura's own expiry.
+- **Casting never touches your target.** Buffs, resurrects and soulstones go straight to the chosen player (`C_Spell.CastAtUnit`, `C_Item.UseAtUnit`); range comes from `C_Spell.IsSpellInRange`. Greater Blessings, Gift of the Wild and other group buffs are found by name, so they cast reliably.
+- **Fewer false warnings.** No "on cooldown" message during the global cooldown, a clear message when a spell can't be used, and feigning hunters are no longer counted as dead.
+- **New debuff bars.** Magic Debuffs, Curses, Poisons, Diseases and Debuffs I Can Cure, under the *Debuffs* group in the bar editor.
+- **AddOn Options pages.** Game Menu > AddOn Options > RABuffs has five pages: RABuffs (bar window), Buffing, Profiles, Bars and Buff list. They replace the old settings window; `/rab` opens them.
+- **Live tooltips.** Pressing or releasing Shift or Alt over a bar redraws its tooltip straight away.
+- **Fixes.** Text reports from `/rabq` and Ctrl-click work in a party, bars whose query no longer exists are dropped instead of breaking the window, the "Self only" checkbox works for every bar, the health query reports correctly, and a number of leaked globals are gone. The 30-second raid buff broadcast and its hidden chat channel were removed; version checks still work by whisper.
+
+### Install
+
+Extract the release zip into `Interface\AddOns` (it contains the `Rabuffs` folder), replacing any older RABuffs. Settings and profiles from 0.12 carry over.
+
+### Version history
+
+- **0.13.0** - First ClassicAPI edition (everything above).
+
+## WARNING
 This version is not backwards compatible with the original - it uses a new format in the WTF file as the original was very impractical to work with.
 
 I would recommend backing up your WTF folder or SavedVariables\Rabuffs.lua in case you ever want to revert.
 
-# Pepo Changes
+## Pepo Changes
 
 - All buffs can be toggled self only rather than having two versions
 - Options for hiding in combat and hiding buffs that are active
@@ -13,7 +36,7 @@ I would recommend backing up your WTF folder or SavedVariables\Rabuffs.lua in ca
 - Better identification of buffs with the same texture/tooltip
 - Added profile system to save and load buff sets
 
-# RABuffs
+## About RABuffs
 
 An addon to track raid wide and your personal buffs and personal weapon enchants.
 
@@ -29,10 +52,10 @@ There is also an addon based on Rabuffs that can log buffs to a file for trackin
 
 ### Basic Commands (`/rab` or `/rabuffs`)
 
-- `/rab` - Show help and available commands
+- `/rab` - Open the AddOn Options pages and list the commands
 - `/rab show` - Display the RABuffs UI frame (if hidden)
 - `/rab hide` - Hide the RABuffs UI frame
-- `/rab info` - Display buff/debuff texture names on your current target
+- `/rab info` - List the buffs and debuffs on your current target, with spell IDs and matching query keys
 - `/rab versioncheck [target]` - Check RABuffs versions
   - `/rab versioncheck` - Check raid/party (default based on group type)
   - `/rab versioncheck raid` - Check current raid
@@ -51,7 +74,6 @@ There is also an addon based on Rabuffs that can log buffs to a file for trackin
 
 ### Advanced Commands
 
-- `/rab hookchat` - Toggle chat frame event hooking
 - `/rab regtest` - Perform query regression test (debug)
 - `/rab coreinfo` - Display core addon information
 

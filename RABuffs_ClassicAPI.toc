@@ -1,0 +1,22 @@
+## Interface: 11200
+## Title: RABuffs |cffc8a2c8(Requires Classic API)|r
+## Author: pepopo978 & Heallios
+## Version: 0.13.0
+## Notes: Raid and party buff bars: tracks buffs, debuffs and weapon enchants, and casts missing buffs from a click. ClassicAPI edition.
+## OptionalDeps: CT_RaidAssist
+## SavedVariables: RABui_Settings
+## SavedVariablesPerCharacter: RABui_IsUIShown
+## X-URL: https://github.com/KameleonUK/Rabuffs
+classicapi_check.lua
+libs\ClassicAPIOptionsKit\ClassicAPIOptionsKit.lua
+RABuffs_strings.lua
+localization_en.lua
+RABuffs_core.lua
+RABuffs_queries.lua
+RABuffs_buffs.lua
+RABuffs_ctra.lua
+RABuffs_net.lua
+RABuffs_ui.lua
+RABuffs_vui.lua
+RABuffs.xml
+RABuffs_options.lua

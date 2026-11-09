@@ -36,52 +36,11 @@
             <OnUpdate>if (RABui_Settings.enablefadingfx) then RABui_BarRedraw(); end</OnUpdate>
         </Scripts>
     </Button>
-    <Frame name="RAB_Settings_TabFrame" virtual="true" hidden="true" movable="true" enableMouse="true">
+    <Frame name="RAB_Settings_TabFrame" virtual="true" hidden="true" enableMouse="true">
         <Size>
             <AbsDimension x="315" y="355"/>
         </Size>
-        <Anchors>
-            <Anchor point="TOPLEFT" relativeTo="RAB_SettingsFrame">
-                <Offset>
-                    <AbsDimension x="22" y="-77"/>
-                </Offset>
-            </Anchor>
-        </Anchors>
     </Frame>
-    <CheckButton name="RAB_Settings_CheckBox" virtual="true" inherits="OptionsCheckButtonTemplate">
-        <Size>
-            <AbsDimension x="25" y="25"/>
-        </Size>
-        <Scripts>
-            <OnClick>
-                RABui_Settings_ToggleOption(this.name);
-                RABui_UpdateVisibility(RAB_CurrentGroupStatus, RAB_CurrentGroupStatus)
-                RABui_SyncBars();
-            </OnClick>
-            <OnShow>RABui_Settings_InitOption();</OnShow>
-            <OnEnter>GameTooltip:SetOwner(this, "ANCHOR_RIGHT");
-                GameTooltip:AddLine(getglobal(this:GetName() .. "Text"):GetText(),1,1,1);
-                GameTooltip:AddLine(this.tooltipText,nil,nil,nil,1); GameTooltip:Show();
-            </OnEnter>
-            <OnLeave>GameTooltip:Hide();</OnLeave>
-        </Scripts>
-    </CheckButton>
-    <Button name="RAB_SettingsUTabButton" virtual="true" inherits="TabButtonTemplate">
-        <Scripts>
-            <OnClick>RABui_Settings_SelectUTab(this:GetID());</OnClick>
-            <OnLoad>PanelTemplates_TabResize(0); _,_, t, n = string.find(this:GetName(),"(.+)(%d+)$"); n = tonumber(n);
-                if (n > 1) then this:SetPoint("TOPLEFT",t .. (n-1),"TOPRIGHT"); end
-            </OnLoad>
-        </Scripts>
-    </Button>
-    <Button name="RAB_SettingsTabButton" virtual="true" inherits="CharacterFrameTabButtonTemplate">
-        <Scripts>
-            <OnClick>RABui_Settings_SelectTab(this:GetID()); PanelTemplates_Tab_OnClick(this:GetParent());</OnClick>
-            <OnLoad>PanelTemplates_TabResize(0); _,_, t, n = string.find(this:GetName(),"(.+)(%d+)$"); n = tonumber(n);
-                if (n > 1) then this:SetPoint("TOPLEFT",t .. (n-1),"TOPRIGHT",-16,0); end
-            </OnLoad>
-        </Scripts>
-    </Button>
     <Button name="RAB_SpellTexture" virtual="true">
         <Size>
             <AbsDimension x="32" y="32"/>
@@ -92,10 +51,10 @@
             </Layer>
         </Layers>
         <Scripts>
-            <OnEnter>if (this.spellId ~= nil) then RAB_Tooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT",0,35);
-                RAB_Tooltip:SetSpell(this.spellId,BOOKTYPE_SPELL); end
+            <OnEnter>if (this.spellSlot ~= nil) then RAB_Tooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT",0,35);
+                RAB_Tooltip:SetSpell(this.spellSlot,BOOKTYPE_SPELL); end
             </OnEnter>
-            <OnLeave>if (this.spellId ~= nil) then RAB_Tooltip:Hide(); end</OnLeave>
+            <OnLeave>if (this.spellSlot ~= nil) then RAB_Tooltip:Hide(); end</OnLeave>
         </Scripts>
     </Button>
     <Button name="RAB_Settings_BuffLine" virtual="true">
@@ -236,15 +195,6 @@
 
     <GameTooltip name="RAB_Tooltip" frameStrata="TOOLTIP" hidden="true" inherits="GameTooltipTemplate"
                  parent="UIParent"/>
-    <GameTooltip name="RAB_Spelltip" frameStrata="TOOLTIP" hidden="true" inherits="GameTooltipTemplate"
-                 parent="UIParent"/>
-    <GameTooltip name="RAB_TooltipScanner" hidden="true" inherits="GameTooltipTemplate">
-        <Scripts>
-            <OnLoad>
-                this:SetOwner(this, "ANCHOR_NONE");
-            </OnLoad>
-        </Scripts>
-    </GameTooltip>
     <Frame name="RABFrame" toplevel="true" movable="true" enableMouse="true" parent="UIParent" frameStrata="LOW"
            clampedToScreen="true">
         <Size>
@@ -338,82 +288,27 @@
     </Frame>
 
 
-    <Frame name="RAB_SettingsFrame" toplevel="true" parent="UIParent" movable="true" enableMouse="true" hidden="true">
-        <Size>
-            <AbsDimension x="384" y="512"/>
-        </Size>
-        <Anchors>
-            <Anchor point="TOPLEFT">
-                <Offset>
-                    <AbsDimension x="0" y="-104"/>
-                </Offset>
-            </Anchor>
-        </Anchors>
-        <HitRectInsets>
-            <AbsInset left="0" right="30" top="0" bottom="90"/>
-        </HitRectInsets>
+    <!-- The Buff list and Layout frames are shown on the AddOn Options pages (RABuffs_options.lua). -->
+    <Frame name="RAB_Settings_TabFrame2" inherits="RAB_Settings_TabFrame" parent="UIParent" enableMouse="true">
         <Layers>
-            <Layer level="BACKGROUND">
-                <Texture file="Interface\Spellbook\Spellbook-Icon">
+            <Layer level="OVERLAY">
+                <FontString name="$parentHeader" inherits="GameFontHighlightLarge" justifyH="CENTER">
+                    <Anchors>
+                        <Anchor point="TOP">
+                            <Offset>
+                                <AbsDimension y="-3"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                </FontString>
+                <FontString name="$parentDescription" inherits="GameFontNormal" justifyH="LEFT">
                     <Size>
-                        <AbsDimension x="58" y="58"/>
+                        <AbsDimension x="310"/>
                     </Size>
                     <Anchors>
                         <Anchor point="TOPLEFT">
                             <Offset>
-                                <AbsDimension x="10" y="-8"/>
-                            </Offset>
-                        </Anchor>
-                    </Anchors>
-                </Texture>
-                <Texture name="$parentTex">
-                    <Size>
-                        <AbsDimension x="384" y="512"/>
-                    </Size>
-                </Texture>
-            </Layer>
-            <Layer level="ARTWORK">
-                <Texture name="RAB_SettingsTopLeft" file="Interface\PaperDollInfoFrame\UI-Character-General-TopLeft">
-                    <Size>
-                        <AbsDimension x="256" y="256"/>
-                    </Size>
-                    <Anchors>
-                        <Anchor point="TOPLEFT"/>
-                    </Anchors>
-                </Texture>
-                <Texture name="RAB_SettingsTopRight" file="Interface\PaperDollInfoFrame\UI-Character-General-TopRight">
-                    <Size>
-                        <AbsDimension x="128" y="256"/>
-                    </Size>
-                    <Anchors>
-                        <Anchor point="TOPRIGHT"/>
-                    </Anchors>
-                </Texture>
-                <Texture name="RAB_SettingsBottomLeft"
-                         file="Interface\PaperDollInfoFrame\UI-Character-General-BottomLeft">
-                    <Size>
-                        <AbsDimension x="256" y="256"/>
-                    </Size>
-                    <Anchors>
-                        <Anchor point="BOTTOMLEFT"/>
-                    </Anchors>
-                </Texture>
-                <Texture name="RAB_SettingsBottomRight"
-                         file="Interface\PaperDollInfoFrame\UI-Character-General-BottomRight">
-                    <Size>
-                        <AbsDimension x="128" y="256"/>
-                    </Size>
-                    <Anchors>
-                        <Anchor point="BOTTOMRIGHT"/>
-                    </Anchors>
-                </Texture>
-            </Layer>
-            <Layer level="OVERLAY">
-                <FontString name="RAB_SettingsTitleText" inherits="GameFontNormal">
-                    <Anchors>
-                        <Anchor point="TOP">
-                            <Offset>
-                                <AbsDimension x="0" y="-18"/>
+                                <AbsDimension x="3" y="-25"/>
                             </Offset>
                         </Anchor>
                     </Anchors>
@@ -421,466 +316,158 @@
             </Layer>
         </Layers>
         <Frames>
-            <Button name="RAB_SettingsCloseButton" inherits="UIPanelCloseButton">
+            <Button name="RAB_Settings_BuffList0" inherits="RAB_Settings_BuffLine">
                 <Anchors>
-                    <Anchor point="TOPRIGHT">
+                    <Anchor point="TOPLEFT">
                         <Offset>
-                            <AbsDimension x="-30" y="-8"/>
+                            <AbsDimension y="-66"/>
                         </Offset>
                     </Anchor>
                 </Anchors>
             </Button>
-            <Button name="RAB_SettingsFrameTab1" inherits="RAB_SettingsTabButton" id="1">
+            <ScrollFrame name="RAB_Settings_BuffListScrollBar" inherits="FauxScrollFrameTemplate">
+                <Size>
+                    <AbsDimension x="315" y="270"/>
+                </Size>
                 <Anchors>
-                    <Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT">
-                        <Offset>
-                            <AbsDimension x="15" y="77"/>
-                        </Offset>
-                    </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="RAB_Settings_BuffList0" relativePoint="BOTTOMRIGHT"/>
+                    <Anchor point="BOTTOMRIGHT" relativeTo="RAB_Settings_BuffList15"
+                            relativePoint="BOTTOMRIGHT"/>
                 </Anchors>
-            </Button>
-            <Button name="RAB_SettingsFrameTab2" inherits="RAB_SettingsTabButton" id="2"/>
-            <Button name="RAB_SettingsFrameTab3" inherits="RAB_SettingsTabButton" id="3"/>
-            <Button name="RAB_SettingsFrameTab4" inherits="RAB_SettingsTabButton" id="4"/>
-            <Frame name="RAB_Settings_TabFrame1" inherits="RAB_Settings_TabFrame">
-                <Frames>
-                    <Button name="RAB_Settings_TabFrame1Tab1" inherits="RAB_SettingsUTabButton" id="1">
-                        <Anchors>
-                            <Anchor point="BOTTOMLEFT" relativePoint="TOPLEFT">
-                                <Offset>
-                                    <AbsDimension x="50" y="5"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </Button>
-                    <Button name="RAB_Settings_TabFrame1Tab2" inherits="RAB_SettingsUTabButton" id="2"/>
-                    <Button name="RAB_Settings_TabFrame1Tab3" inherits="RAB_SettingsUTabButton" id="3"/>
-                    <ScrollFrame name="RAB_Settings_Tab1ScrollFrame" inherits="UIPanelScrollFrameTemplate">
-                        <Size>
-                            <AbsDimension x="295" y="353"/>
-                        </Size>
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_TabFrame1"/>
-                        </Anchors>
-                        <ScrollChild>
-                            <SimpleHTML name="RAB_Settings_Tab1HTML">
-                                <Size>
-                                    <AbsDimension x="295" y="50"/>
-                                </Size>
-                                <Anchors>
-                                    <Anchor point="TOPLEFT"/>
-                                </Anchors>
-                                <FontString inherits="GameFontNormal"/>
-                                <FontStringHeader1 inherits="GameFontHighlightLarge"/>
-                                <FontStringHeader2 inherits="GameFontHighlight"/>
-                            </SimpleHTML>
-                        </ScrollChild>
-                    </ScrollFrame>
-                </Frames>
                 <Scripts>
-                    <OnLoad>
-                        PanelTemplates_SetNumTabs(this, 3);
-                        this.selectedTab=2;
-                        PanelTemplates_UpdateTabs(this);
-                    </OnLoad>
+                    <OnVerticalScroll>
+                        FauxScrollFrame_OnVerticalScroll(14, RAB_Settings_BL_Update);
+                    </OnVerticalScroll>
+                    <OnShow>
+                        RAB_Settings_BL_Update();
+                    </OnShow>
                 </Scripts>
-            </Frame>
-            <Frame name="RAB_Settings_TabFrame2" inherits="RAB_Settings_TabFrame" enableMouse="true">
-                <Layers>
-                    <Layer level="OVERLAY">
-                        <FontString name="$parentHeader" inherits="GameFontHighlightLarge" justifyH="CENTER">
-                            <Anchors>
-                                <Anchor point="TOP">
-                                    <Offset>
-                                        <AbsDimension y="-3"/>
-                                    </Offset>
-                                </Anchor>
-                            </Anchors>
-                        </FontString>
-                        <FontString name="$parentDescription" inherits="GameFontNormal" justifyH="LEFT">
-                            <Size>
-                                <AbsDimension x="310"/>
-                            </Size>
-                            <Anchors>
-                                <Anchor point="TOPLEFT">
-                                    <Offset>
-                                        <AbsDimension x="3" y="-25"/>
-                                    </Offset>
-                                </Anchor>
-                            </Anchors>
-                        </FontString>
-                    </Layer>
-                </Layers>
-                <Frames>
-                    <Button name="RAB_Settings_BuffList0" inherits="RAB_Settings_BuffLine">
-                        <Anchors>
-                            <Anchor point="TOPLEFT">
-                                <Offset>
-                                    <AbsDimension y="-66"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </Button>
-                    <ScrollFrame name="RAB_Settings_BuffListScrollBar" inherits="FauxScrollFrameTemplate">
-                        <Size>
-                            <AbsDimension x="315" y="270"/>
-                        </Size>
-                        <Anchors>
-                            <Anchor point="TOPRIGHT" relativeTo="RAB_Settings_BuffList0" relativePoint="BOTTOMRIGHT"/>
-                            <Anchor point="BOTTOMRIGHT" relativeTo="RAB_Settings_BuffList15"
-                                    relativePoint="BOTTOMRIGHT"/>
-                        </Anchors>
-                        <Scripts>
-                            <OnVerticalScroll>
-                                FauxScrollFrame_OnVerticalScroll(14, RAB_Settings_BL_Update);
-                            </OnVerticalScroll>
-                            <OnShow>
-                                RAB_Settings_BL_Update();
-                            </OnShow>
-                        </Scripts>
-                    </ScrollFrame>
-                </Frames>
-                <Scripts>
-                    <OnLoad>
-                        RAB_Settings_BuffList0:Disable();
-                        RAB_Settings_BuffList0Name:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
-                        RAB_Settings_BuffList0Query:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
-                        RAB_Settings_BuffList0Type:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
-                        RAB_BL_Count = 15;
-                        local i, ptr;
-                        for i=1,RAB_BL_Count do
-                        ptr = CreateFrame("BUTTON","RAB_Settings_BuffList" .. i,this,"RAB_Settings_BuffLine");
-                        ptr:SetPoint("TOPLEFT","RAB_Settings_BuffList" .. (i-1),"BOTTOMLEFT",0,-2);
-                        end
-                    </OnLoad>
-                </Scripts>
-            </Frame>
-            <Frame name="RAB_Settings_TabFrame3" inherits="RAB_Settings_TabFrame">
-                <Layers>
-                    <Layer level="OVERLAY">
-                        <FontString name="$parentHeader" inherits="GameFontHighlightLarge" justifyH="CENTER">
-                            <Anchors>
-                                <Anchor point="TOP">
-                                    <Offset>
-                                        <AbsDimension y="-3"/>
-                                    </Offset>
-                                </Anchor>
-                            </Anchors>
-                        </FontString>
-                        <FontString name="$parentDescription" inherits="GameFontNormal" justifyH="LEFT">
-                            <Size>
-                                <AbsDimension x="310"/>
-                            </Size>
-                            <Anchors>
-                                <Anchor point="TOPLEFT">
-                                    <Offset>
-                                        <AbsDimension x="3" y="-25"/>
-                                    </Offset>
-                                </Anchor>
-                            </Anchors>
-                        </FontString>
-                    </Layer>
-                </Layers>
-                <Frames>
-                    <Button name="RAB_Settings_ClearAllBars" inherits="UIPanelButtonTemplate">
-                        <Size>
-                            <AbsDimension x="100" y="26"/>
-                        </Size>
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_TabFrame3Description" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="-5"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                        <Scripts>
-                            <OnClick>RABui_Settings_Layout_ClearAllBars();</OnClick>
-                        </Scripts>
-                    </Button>
-                    <Button name="RAB_Settings_BarLine0" inherits="RAB_Settings_BarLine">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_ClearAllBars" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="-10"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </Button>
-                    <ScrollFrame name="RAB_Settings_LayoutScrollBar" inherits="FauxScrollFrameTemplate">
-                        <Size>
-                            <AbsDimension x="315" y="240"/>
-                        </Size>
-                        <Anchors>
-                            <Anchor point="TOPRIGHT" relativeTo="RAB_Settings_BarLine0" relativePoint="BOTTOMRIGHT"/>
-                            <Anchor point="BOTTOMRIGHT" relativeTo="RAB_Settings_BarLine17"
-                                    relativePoint="BOTTOMRIGHT"/>
-                        </Anchors>
-                        <Scripts>
-                            <OnVerticalScroll>
-                                FauxScrollFrame_OnVerticalScroll(14, RABui_Settings_Layout_SyncList);
-                            </OnVerticalScroll>
-                            <OnShow>
-                                RABui_Settings_Layout_SyncList();
-                            </OnShow>
-                        </Scripts>
-                    </ScrollFrame>
-                    <Button name="RAB_Settings_BarLine20" id="20" text="sRAB_Settings_Layout_AddNewBar">
-                        <Size>
-                            <AbsDimension x="295" y="16"/>
-                        </Size>
-                        <NormalText inherits="GameFontHighlightSmall" justifyH="CENTER"/>
-                        <HighlightTexture file="Interface\FriendsFrame\UI-FriendsFrame-HighlightBar" alphaMode="ADD"/>
-                        <Scripts>
-                            <OnClick>RABui_Settings_Layout_SelectBar(this:GetID());</OnClick>
-                        </Scripts>
-                    </Button>
-                </Frames>
-                <Scripts>
-                    <OnLoad>
-                        RAB_Settings_BarLine0Name:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
-                        RAB_Settings_BarLine0Query:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
-                        RAB_Settings_BarLine0Position:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
-                        RAB_Settings_BarLine0:Disable();
-                        RAB_Settings_BarLine0MoveUp:Hide();
-                        RAB_Settings_BarLine0Swatch:Hide();
-                        RAB_Settings_BarLine0MoveDown:Hide();
-                        RAB_BarList_Count = 15;
-                        local i, ptr;
-                        for i=1,RAB_BarList_Count do
-                        ptr = CreateFrame("BUTTON","RAB_Settings_BarLine" .. i,this,"RAB_Settings_BarLine");
-                        ptr:SetPoint("TOPLEFT",getglobal("RAB_Settings_BarLine" .. (i-1)),"BOTTOMLEFT");
-                        ptr:SetID(i);
-                        end
-                    </OnLoad>
-                </Scripts>
-            </Frame>
-            <Frame name="RAB_Settings_TabFrame4" inherits="RAB_Settings_TabFrame">
-                <Layers>
-                    <Layer level="OVERLAY">
-                        <FontString name="$parentHeader" inherits="GameFontHighlightLarge" justifyH="CENTER">
-                            <Anchors>
-                                <Anchor point="TOP">
-                                    <Offset>
-                                        <AbsDimension y="-3"/>
-                                    </Offset>
-                                </Anchor>
-                            </Anchors>
-                        </FontString>
-                        <FontString name="$parentDescription" inherits="GameFontNormal" justifyH="LEFT">
-                            <Size>
-                                <AbsDimension x="310"/>
-                            </Size>
-                            <Anchors>
-                                <Anchor point="TOPLEFT">
-                                    <Offset>
-                                        <AbsDimension x="3" y="-25"/>
-                                    </Offset>
-                                </Anchor>
-                            </Anchors>
-                        </FontString>
-                        <FontString name="RAB_Settings_Buffing" inherits="GameFontHighlight"/>
-                        <FontString name="RAB_Settings_VUIConfig" inherits="GameFontHighlight"/>
-                    </Layer>
-                </Layers>
-                <Frames>
-                    <CheckButton name="RAB_Settings_castbigbuffs" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_Buffing" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="5" y="-2"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_alwayscastbigbuffs" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_castbigbuffs" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_partymode" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_alwayscastbigbuffs"
-                                    relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_stoppvp" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_partymode" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_trustctra" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_stoppvp" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-
-                    <CheckButton name="RAB_Settings_showsolo" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_VUIConfig" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="5" y="-2"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_hideincombat" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_showsolo" relativePoint="TOPLEFT">
-                                <Offset>
-                                    <AbsDimension x="150" y="0"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_showparty" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_showsolo" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_showraid" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_showparty" relativePoint="TOPLEFT">
-                                <Offset>
-                                    <AbsDimension x="150" y="0"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_lockwindow" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_showparty" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_hideactive" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_lockwindow" relativePoint="TOPLEFT">
-                                <Offset>
-                                    <AbsDimension x="150" y="0"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_enablefadingfx" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_lockwindow" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_colorizechat" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_enablefadingfx" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_syntaxhelp" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_colorizechat" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_showsampleoutputonclick" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_syntaxhelp" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-                    <CheckButton name="RAB_Settings_dummymode" inherits="RAB_Settings_CheckBox">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_showsampleoutputonclick"
-                                    relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="7"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </CheckButton>
-
-                    <Button name="RAB_Settings_localizationSelector" inherits="UIDropDownMenuTemplate">
-                        <Size>
-                            <AbsDimension x="225" y="32"/>
-                        </Size>
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_dummymode" relativePoint="BOTTOMLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="3"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                        <Scripts>
-                            <OnLoad>
-                                RABui_Settings_localizationSelector_OnLoad();
-                            </OnLoad>
-                        </Scripts>
-                    </Button>
-                </Frames>
-                <Scripts>
-                    <OnLoad>
-                        RAB_Settings_Buffing:SetPoint("TOPLEFT","RAB_Settings_TabFrame1","TOPLEFT",3,-40);
-                        RAB_Settings_VUIConfig:SetPoint("TOPLEFT","RAB_Settings_TabFrame1","TOPLEFT",3,-155);
-                    </OnLoad>
-                </Scripts>
-            </Frame>
+            </ScrollFrame>
         </Frames>
         <Scripts>
             <OnLoad>
-                UIPanelWindows[this:GetName()] = { area = "left", pushable = 3, whileDead = 1 };
-                PanelTemplates_SetNumTabs(this, 4);
-                this.selectedTab=1;
-                PanelTemplates_UpdateTabs(this);
-                local self = this;
-                this:RegisterForDrag("LeftButton")
-                this:SetScript("OnDragStart", function() self:StartMoving() end)
-                this:SetScript("OnDragStop", function() self:StopMovingOrSizing() end)
+                RAB_Settings_BuffList0:Disable();
+                RAB_Settings_BuffList0Name:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
+                RAB_Settings_BuffList0Query:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
+                RAB_Settings_BuffList0Type:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
+                RAB_BL_Count = 15;
+                local i, ptr;
+                for i=1,RAB_BL_Count do
+                ptr = CreateFrame("BUTTON","RAB_Settings_BuffList" .. i,this,"RAB_Settings_BuffLine");
+                ptr:SetPoint("TOPLEFT","RAB_Settings_BuffList" .. (i-1),"BOTTOMLEFT",0,-2);
+                end
+            </OnLoad>
+        </Scripts>
+    </Frame>
+    <Frame name="RAB_Settings_TabFrame3" inherits="RAB_Settings_TabFrame" parent="UIParent">
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString name="$parentHeader" inherits="GameFontHighlightLarge" justifyH="CENTER">
+                    <Anchors>
+                        <Anchor point="TOP">
+                            <Offset>
+                                <AbsDimension y="-3"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                </FontString>
+                <FontString name="$parentDescription" inherits="GameFontNormal" justifyH="LEFT">
+                    <Size>
+                        <AbsDimension x="310"/>
+                    </Size>
+                    <Anchors>
+                        <Anchor point="TOPLEFT">
+                            <Offset>
+                                <AbsDimension x="3" y="-25"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Frames>
+            <Button name="RAB_Settings_ClearAllBars" inherits="UIPanelButtonTemplate">
+                <Size>
+                    <AbsDimension x="100" y="26"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPLEFT" relativeTo="RAB_Settings_TabFrame3Description" relativePoint="BOTTOMLEFT">
+                        <Offset>
+                            <AbsDimension x="0" y="-5"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnClick>RABui_Settings_Layout_ClearAllBars();</OnClick>
+                </Scripts>
+            </Button>
+            <Button name="RAB_Settings_BarLine0" inherits="RAB_Settings_BarLine">
+                <Anchors>
+                    <Anchor point="TOPLEFT" relativeTo="RAB_Settings_ClearAllBars" relativePoint="BOTTOMLEFT">
+                        <Offset>
+                            <AbsDimension x="0" y="-10"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+            </Button>
+            <ScrollFrame name="RAB_Settings_LayoutScrollBar" inherits="FauxScrollFrameTemplate">
+                <Size>
+                    <AbsDimension x="315" y="240"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPRIGHT" relativeTo="RAB_Settings_BarLine0" relativePoint="BOTTOMRIGHT"/>
+                    <Anchor point="BOTTOMRIGHT" relativeTo="RAB_Settings_BarLine17"
+                            relativePoint="BOTTOMRIGHT"/>
+                </Anchors>
+                <Scripts>
+                    <OnVerticalScroll>
+                        FauxScrollFrame_OnVerticalScroll(14, RABui_Settings_Layout_SyncList);
+                    </OnVerticalScroll>
+                    <OnShow>
+                        RABui_Settings_Layout_SyncList();
+                    </OnShow>
+                </Scripts>
+            </ScrollFrame>
+            <Button name="RAB_Settings_BarLine20" id="20" text="sRAB_Settings_Layout_AddNewBar">
+                <Size>
+                    <AbsDimension x="295" y="16"/>
+                </Size>
+                <NormalText inherits="GameFontHighlightSmall" justifyH="CENTER"/>
+                <HighlightTexture file="Interface\FriendsFrame\UI-FriendsFrame-HighlightBar" alphaMode="ADD"/>
+                <Scripts>
+                    <OnClick>RABui_Settings_Layout_SelectBar(this:GetID());</OnClick>
+                </Scripts>
+            </Button>
+        </Frames>
+        <Scripts>
+            <OnLoad>
+                RAB_Settings_BarLine0Name:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
+                RAB_Settings_BarLine0Query:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
+                RAB_Settings_BarLine0Position:SetTextColor(NORMAL_FONT_COLOR.r,NORMAL_FONT_COLOR.g,NORMAL_FONT_COLOR.b);
+                RAB_Settings_BarLine0:Disable();
+                RAB_Settings_BarLine0MoveUp:Hide();
+                RAB_Settings_BarLine0Swatch:Hide();
+                RAB_Settings_BarLine0MoveDown:Hide();
+                RAB_BarList_Count = 15;
+                local i, ptr;
+                for i=1,RAB_BarList_Count do
+                ptr = CreateFrame("BUTTON","RAB_Settings_BarLine" .. i,this,"RAB_Settings_BarLine");
+                ptr:SetPoint("TOPLEFT",getglobal("RAB_Settings_BarLine" .. (i-1)),"BOTTOMLEFT");
+                ptr:SetID(i);
+                end
             </OnLoad>
         </Scripts>
     </Frame>
 
-    <Frame name="RAB_BarDetailFrame" hidden="true" toplevel="true"
-           parent="RAB_Settings_TabFrame3"
-           frameStrata="HIGH">
+    <Frame name="RAB_BarDetailFrame" hidden="true"
+           parent="RAB_Settings_TabFrame3">
         <Size>
             <AbsDimension x="250" y="400"/>
         </Size>
         <Anchors>
-            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_TabFrame3" relativePoint="TOPRIGHT">
+            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_TabFrame3" relativePoint="BOTTOMLEFT">
                 <Offset>
-                    <AbsDimension x="10" y="0"/>
+                    <AbsDimension x="0" y="-6"/>
                 </Offset>
             </Anchor>
         </Anchors>
@@ -1236,16 +823,15 @@
         </Scripts>
     </Frame>
 
-    <Frame name="RAB_BuffDetailFrame" hidden="true" toplevel="true"
-           parent="RAB_Settings_TabFrame2"
-           frameStrata="HIGH">
+    <Frame name="RAB_BuffDetailFrame" hidden="true"
+           parent="RAB_Settings_TabFrame2">
         <Size>
             <AbsDimension x="235" y="170"/>
         </Size>
         <Anchors>
-            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_TabFrame2" relativePoint="TOPRIGHT">
+            <Anchor point="TOPLEFT" relativeTo="RAB_Settings_TabFrame2" relativePoint="BOTTOMLEFT">
                 <Offset>
-                    <AbsDimension x="10" y="0"/>
+                    <AbsDimension x="0" y="-6"/>
                 </Offset>
             </Anchor>
         </Anchors>

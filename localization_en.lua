@@ -62,13 +62,6 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
     end
     if (ui) then
         sRAB_Localization_UI = "|c0000ff00English UI|r";
-        sRAB_Settings_Welcome =
-        "<p>RABuffs can be configured using this dialog. A list of buff queries in the 'Buffs' tab, the visual interface is configurable through the 'Layout' tab, and a list of general options is available in the 'Settings' tab.</p><br/><p>You can also use /rab and /rabq to execute addon actions without using the VUI.</p>";
-        sRAB_Settings_Version =
-            "<h2 align=\"left\">Version / localization data</h2><p>Version: %s<br/>Localization: %s (Client: %s)<br/><br/>Download updates from:<br/>|c000077ff" ..
-            sRAB_DownloadURL .. "|r</p>";
-        sRAB_Settings_VersionNewest = " (Up to date)";
-        sRAB_Settings_VersionOutdated = " (Newest: %s used by %s on %s)";
         sRAB_Settings_CastLayerGuessed = " (Guessed)";
         sRAB_Settings_TabSettings = "Settings";
         sRAB_Settings_TabBuffs = "Buffs";
@@ -146,13 +139,7 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
         sRAB_Settings_Option_partymode = "Prioritize own party";
         sRAB_Settings_Option_partymode_Description =
         "When casting single buffs, buff everyone in your own party before moving on to the rest of the raid.";
-        sRAB_Settings_Option_trustctra = "Trust CTRA's RN feedback";
-        sRAB_Settings_Option_trustctra_Description =
-        "CT_RaidAssist buff duration broadcasts can be parsed by RABuffs, but are not always accurate (fix it, Cide!).\nIf checked, RABuffs will use those messages for duration feedback when RABuffs' native broadcasts are not available.";
         sRAB_Settings_Settings_VUIConfig = "User Interface";
-        sRAB_Settings_Option_syntaxhelp = "Show syntax help";
-        sRAB_Settings_Option_syntaxhelp_Description =
-        "Displays syntax help in a tooltip when you type /rab or /rabq into the chat box.\nRequires SlashHelp.";
         sRAB_Settings_Option_dummymode = "Show help in bar tooltips";
         sRAB_Settings_Option_dummymode_Description =
         "If unchecked, the \"CTRL+Click to ... SHIFT to invert\" line will not appear in bar tooltips.";
@@ -184,18 +171,14 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
         sRAB_Settings_Localization_vui = "User Interface";
         sRAB_Settings_Localization_out = "Chat Output";
 
-        sRAB_IntroText =
-            "<html><body><h1 align=\"center\">Introduction</h1><p>RABuffs user interface works by allowing you to view the status of different buffs within a party/raid group: the more complete the bar is, the more people have the buff in question (flashing or fading segments indicate that the buff will soon expire) . By default, RABuffs displays at least three bars: &quot;alive&quot;, the number of people not dead out of the total raid headcount; &quot;healer&quot;, mana status of Priests, Druids, Paladins and Shamans; and &quot;dps&quot;, the mana status of Mages, Warlocks and Hunters. If you are playing as a priest, druid or mage, the default window may contain additional bars for your specific buff spells.</p><br/>" ..
-            "<p>Point your mouse over a bar and a tooltip detailing the people missing (or having it, depending on the buff) -- some buffs will pop up different information specific to the query they're handling (health, for example, would display dead people as unbuffed). If you hold down SHIFT, the tooltip will invert to show the buffed group members.</p><br/>" ..
-            "<p>If you click on a bar that shows a buff you can cast, RABuffs will attempt to buff one of the unbuffed group member in the order determined by the buff priorities (for example, healing classes always get Arcane Intellect before dps, and you yourself get buffed first). Clicking on special bars may alter this behaviour slightly - clicking on a health or alive bar will cast resurrection if you're playing as a Priest, Paladin or Shaman. If you want to cast a group version of the buff, hold down ALT while clicking (you can turn on casting group buffs by default in the settings tab).</p><br/>" ..
-            "<p>If you click on a bar that shows a buff you can't cast, RABuffs will output buff status to your local chat window, showing unbuffed people. Holding SHIFT will also invert this output. If you want to broadcast this message to your raid or party group, hold CTRL while clicking the bar (the destination of the broadcast is customizable in the Layout tab of this configuration dialog).</p><br/>" ..
-            "<h2>Author Notes</h2><p>RABuffs periodically joins a channel to check its version among other RABuffs installations on your server -- this enables it to notify you in game when updates are available.</p><br/><p>Although RABuffs versions tend to be relatively stable, some bugs may sneak in - depending on the severity, they may be patched immediately or in the next version. If RABuffs generates errors too frequently without user interaction, try hiding its UI window (/rab hide) to turn off most of the non-requested calls.</p><br/><br/></body></html>";
 
         sRAB_Slash_Help = {
-            "/rab show -- shows the UI frame.",
-            "/rab info -- displays texture names of the buffs and debuffs on your current target.",
+            "/rab -- opens RABuffs in Game Menu > AddOn Options.",
+            "/rab show | hide -- shows or hides the bar window.",
+            "/rab info -- lists the buffs and debuffs on your target, with spell IDs and query keys.",
             "/rab versioncheck (raid|party|guild|PlayerName) -- checks RABuffs version used by the raid (default), party, guild or a specific player.",
             "/rab profile (save|load|delete|list|current) [name] -- manage profiles.",
+            "/rab regtest | coreinfo -- debug: run every query / list event subscribers.",
             "/rabq {buffquery} -- runs a buff query. Run /rabq for specific syntax help."
         };
         sRAB_Slash_QHelp = {
@@ -206,25 +189,7 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
             "[groups]: # of each group to scan. '148' would only scan groups 1, 4 and 8.",
             "[classes]: letter for each class to scan (Mage warLock Priest Rogue Druid Hunter Shaman Warrior pAladin)."
         };
-        sRAB_Slash_SyntaxHelp = {
-            { "^/rab ",                           "-/rab+ [command] {parameters}",    "_show= -- shows the UI frame.",                               "_info= -- displays buffs/debuffs on current target.", "_versioncheck= {target} -- checks RABuffs verion.", "_=Try also /rabq for querying buffs from the chat window." },
-            { "^/rab show",                       "-/rab show+",                      "Displays the RABuffs user interface after it's been hidden." },
-            { "^/rab info",                       "-/rab info+",                      "Displays the buff/debuff textures present on current target." },
-            { "^/rab versioncheck",               "-/rab versioncheck+ {parameters}", "_raid= -- checks versions in current raid.",                  "_party= -- checks versions in current party.",        "_guild= -- checks versions in the guild.",          "_PlayerName= -- checks Player's version." },
-            { "^/rab versioncheck guild",         "-/rab versioncheck guild+",        "Checks versions in your guild." },
-            { "^/rab versioncheck party",         "-/rab versioncheck party+",        "Checks versions in your party." },
-            { "^/rab versioncheck raid",          "-/rab versioncheck raid+",         "Checks versions in your raid group." },
-            { "^/rab versioncheck %a%a%a%a%a%a+", "-/rab versioncheck PlayerName+",   "Checks version through a whisper." },
-        };
-        sRAB_Slash_QSyntaxHelp = {
-            target = { "-/rabq +{target} [command] {group limit} {class limit}", "_=(Optional) output destination. Default = console.", "_raid= -- output to /raid.", "_party= -- output to /party.", "_officer= -- output to /officer", "_w PlayerName= -- whisper to PlayerName.", "_c ChannelNameOr#= -- Output to channel." },
-            buffquery = { "-/rabq target +[command] {group limit} {class limit}", "_=Use the Valid Query List to find the query name.  If you want to invert the output, prefix with 'not '." },
-            buffqueryinvalid = { "-/rabq target + [command] {group limit} {class limit}", "_=Use the Valid Query List to find the query name.", "_=" .. RED_FONT_COLOR_CODE .. " You picked an invalid buff query. Go back and revise." .. FONT_COLOR_CODE_CLOSE },
-            limits = { "-/rabq target command +{group limit} {class limit}", "_=(Optional) Limits the scan to the specified groups / classes. Default = all.", "_={group limit} -- Group numbers. Example: 12345678", "_={class limit} -- letter / class.", "_=Begin typing a limit to view detailed help" },
-            limitg = { "-/rabq target command +{group limit} {class limit}", "_=(Optional) One # for each group to scan.", "_=Default: 12345678. To skip, start typing the class limit." },
-            limitc = { "-/rabq target command group limit+ {class limit}", "_=(Optional) One letter for each class to scan:", "_m=age, war_l=ock, _p=riest.", "_r=ogue, _d=ruid.", "_h=unter, _s=haman.", "_w=arrior, p_a=ladin." }
-        };
-        sRAB_Slash_UnrecognizedCommand = "[RABuffs] Command not recognized. You probably wanted /rabq [query].";
+        sRAB_Slash_UnrecognizedCommand = "[RABuffs] Unknown command. Settings are in Game Menu > AddOn Options > RABuffs; type /rab to open them. Buff queries use /rabq [query].";
         sRAB_Slash_UnrecognizedQuery = "[RABuffs] Buff query not recongized. You probably wanted /rab [command].";
 
 
@@ -232,7 +197,7 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
         sRAB_Error_NoBuffData = "Missing buff data for this query.";
         sRAB_Error_NoBuffDataBar = " (invalid query)";
         sRAB_Greeting = "[RABuffs] Version %s loaded. /rab.";
-        sRAB_UpdateComplete = "[RABuffs] Updated from %s to %s. See Recent Changes for more information."
+        sRAB_UpdateComplete = "[RABuffs] Updated from %s to %s. Settings are now in Game Menu > AddOn Options > RABuffs (/rab)."
         sRAB_OutOfDate_Box = NORMAL_FONT_COLOR_CODE ..
             "You are not using the most recent version of RABuffs (%s). Download updates from:|r\n|c000077ff" ..
             sRAB_DownloadURL .. "|r";
@@ -241,7 +206,7 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
         sRAB_DownloadLink = "[RABuffs] Download URL: " .. sRAB_DownloadURL;
 
         sRAB_Menu_HideWindow = "Hide Window";
-        sRAB_Menu_Settings = "Configure";
+        sRAB_Menu_Settings = "Options";
         sRAB_Menu_HiddenWindow = "[RABuffs] UI frame has been hidden. Use /rab show to make it visible again.";
 
         sRAB_VersionCheck_BeginGuild = "[Version] Checking guild's RABuffs versions.";
@@ -306,6 +271,10 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
         sRAB_Tooltip_CastFail_Cooldown = "|cffff0000Cooldown (%ss).|r";
         sRAB_Tooltip_CastFail_Combat = "|cffff0000In combat.|r";
         sRAB_Tooltip_CastFail_NoItem = "|cffff0000Can't find %s.|r";
+        sRAB_Tooltip_CastFail_Unusable = "|cffff0000Cannot cast right now (form, reagents or state).|r";
+        sRAB_CastingLayer_Unusable = "[RABuffs] Could not cast " .. HIGHLIGHT_FONT_COLOR_CODE .. "%s|r: not usable right now (form, reagents or state).";
+        sRAB_CastingLayer_NoItem = "[RABuffs] You have no " .. HIGHLIGHT_FONT_COLOR_CODE .. "%s|r.";
+        sRAB_CastingLayer_NoWeapon = "[RABuffs] No weapon equipped in that hand.";
 
         sRAB_Tooltip_TimeLeft = NORMAL_FONT_COLOR_CODE ..
             "Time left: |r" .. HIGHLIGHT_FONT_COLOR_CODE .. "%s|r" .. NORMAL_FONT_COLOR_CODE .. ".";
@@ -314,20 +283,5 @@ sRAB_LOCALIZATION["enUS"] = function(ui, output, spells)
             HIGHLIGHT_FONT_COLOR_CODE .. "%s|r': you must join this channel first.";
 
         sRAB_Core_GroupFormat = "Group %s";
-    end
-    if (spells and GetLocale() == "enUS") then
-        sRAB_Localization_SpellLayer = "|c0000ff00English spellbook|r";
-        if (RAB_UnitClass("player") == "Druid") then
-            sRAB_SpellNames.motw = "Mark of the Wild";
-            sRAB_SpellIDs.motw = sRAB_FindSpellId("Mark of the Wild");
-            sRAB_SpellNames.gotw = "Gift of the Wild";
-            sRAB_SpellIDs.gotw = sRAB_FindSpellId("Gift of the Wild");
-            if (sRAB_SpellIDs.gotw == 0) then
-                sRAB_SpellIDs.gotw = nil; sRAB_SpellNames.gotw = nil;
-            end
-            if (sRAB_SpellIDs.motw == 0) then
-                sRAB_SpellIDs.motw = nil; sRAB_SpellNames.motw = nil;
-            end
-        end
     end
 end

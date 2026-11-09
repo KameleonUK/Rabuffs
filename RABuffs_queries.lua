@@ -1,54 +1,31 @@
--- RABuffs_data.lua
+-- RABuffs_queries.lua
 --  Dictionary between RABuffs_core.lua and user -- provides core-information for queriable effects.
--- Version 0.10.1
+-- Version 0.13.0
 -- BLOCK 1: Query functions
 -- BLOCK 2: Casting functions
--- BLOCK 3: Query definitions
+-- BLOCK 3: Query definitions (RABuffs_buffs.lua)
 
 
 RAB_PendingRes = {}; --Name=expire;
-RAB_BuffTimers = {}; -- Name.query = expire;
+RAB_BuffTimers = {}; -- Name.query = expire (GetTime); filled from CTRA "RN" messages, a fallback only
 
+-- Returns shouldRecast, secondsLeft. The time comes from the aura itself (ClassicAPI records the expiry
+-- of your own auras and of every aura whose cast your client saw this session); CTRA's timers are used
+-- only when the aura's expiry isn't known.
 function RAB_ShouldRecast(unit, buffKey, isbuffed)
-	local bkey = UnitName(unit) .. "." .. buffKey;
-	if (RAB_BuffTimers[bkey] ~= nil and RAB_BuffTimers[bkey] > GetTime() and RAB_Buffs[buffKey].recast ~= nil) then
-		if (isbuffed) then
-			fadetime = RAB_BuffTimers[bkey] - GetTime();
-			if (fadetime < RAB_Buffs[buffKey].recast * 60) then
-				return true, fadetime;
-			end
-			return false, fadetime;
-		else
-			RAB_BuffTimers[bkey] = 0;
-		end
+	local buff = RAB_Buffs[buffKey];
+	if (not isbuffed or buff == nil or buff.recast == nil) then
+		return false;
+	end
+	local expires = RAB_GetBuffExpiry(unit, buffKey);
+	if (expires == 0) then
+		expires = RAB_BuffTimers[UnitName(unit) .. "." .. buffKey] or 0;
+	end
+	local fadetime = expires - GetTime();
+	if (fadetime > 0) then
+		return fadetime < buff.recast * 60, fadetime;
 	end
 	return false;
-end
-
-function RAB_ResetRecastTimer(unit, userData, castType)
-	local i, u, g, m;
-	if (castType == nil) then
-		RAB_BuffTimers[UnitName(unit) .. "." .. userData.buffKey] = 0;
-	elseif (castType == "group") then
-		for i, u, g in RAB_GroupMembers(userData) do
-			if (UnitIsUnit(unit, u)) then
-				m = g;
-				break ;
-			end
-		end
-		for i, u, g in RAB_GroupMembers(userData) do
-			if (g == m) then
-				RAB_BuffTimers[UnitName(u) .. "." .. userData.buffKey] = 0;
-			end
-		end
-	elseif (castType == "class") then
-		m = RAB_UnitClass(unit);
-		for i, u, g in RAB_GroupMembers(userData) do
-			if (RAB_UnitClass(u) == m) then
-				RAB_BuffTimers[UnitName(u) .. "." .. userData.buffKey] = 0;
-			end
-		end
-	end
 end
 
 -- BLOCK 1: Query functions
@@ -79,22 +56,6 @@ function RAB_CollectPlayerWeaponBuffs(buffData)
 	end
 
 	return results
-end
-
--- Uses either the buff name or a combination of the tooltip and texture to identify the buff
-function RAB_GetBuffKeys(buffData)
-	local keys = {}
-	-- if there are identifiers, use those
-	if buffData.identifiers then
-		for _, identifier in ipairs(buffData.identifiers) do
-			table.insert(keys, identifier.tooltip .. identifier.texture)
-		end
-	else
-		-- otherwise use name
-		table.insert(keys, buffData.name)
-	end
-
-	return keys
 end
 
 function RAB_WeaponIsBuffed(weaponBuffs, buffData)
@@ -165,11 +126,12 @@ function RAB_DefaultQueryHandler(userData, needraw, needtxt)
 						isbuffed = true
 					end
 				else
-					-- check all identifiers
+					-- check all identifiers; the aura cache also gives the stack count
 					for _, identifier in ipairs(buffData.identifiers) do
-						if (sfunc(u, identifier)) then
+						local up, count = sfunc(u, identifier);
+						if (up) then
 							isbuffed = true
-							_, appl = sfunc(u, identifier);
+							appl = count;
 							break ;
 						end
 					end
@@ -335,24 +297,24 @@ function RAB_QueryBlank()
 	return 0, 0, 0, "";
 end
 
+-- "Name (spellId) [queryKey]": the spell ID is what RAB_Buffs identifiers use, so this is what you need
+-- to add a new consumable.
+local function RAB_AuraLabel(e)
+	local key = RAB_AuraToBuff(e);
+	return e.name .. " (" .. tostring(e.spellId) .. ")" .. (key ~= nil and (" [" .. key .. "]") or "");
+end
+
 function RAB_QueryBuffInfo()
-	local buffs, debuffs, i, buff, bn = "", "", 1;
 	if (not UnitExists("target")) then
 		return 0, 0, 0, "", "", "", sRAB_BuffOutput_BuffInfo_NoTarget, sRAB_BuffOutput_BuffInfo_NoTarget, false;
 	end
-	while (UnitBuff("target", i)) do
-		buff = RAB_TextureToBuff(UnitBuff("target", i));
-		if (bn ~= nil) then
-			b = "[" .. RAB_Buffs[bn].name .. "]";
-		end
-		buffs = buffs .. (buffs == "" and "" or ", ") .. b;
-		i = i + 1;
+	local cache = RAB_GetAuraCache("target");
+	local buffs, debuffs, i = "", "";
+	for i = 1, cache.buffs.n do
+		buffs = buffs .. (buffs == "" and "" or ", ") .. RAB_AuraLabel(cache.buffs[i]);
 	end
-	i = 1;
-	while (UnitDebuff("target", i)) do
-		b = string.sub(UnitDebuff("target", i), 17);
-		debuffs = debuffs .. (debuffs == "" and "" or ", ") .. b;
-		i = i + 1;
+	for i = 1, cache.debuffs.n do
+		debuffs = debuffs .. (debuffs == "" and "" or ", ") .. RAB_AuraLabel(cache.debuffs[i]);
 	end
 	local text = string.format(sRAB_BuffOutput_BuffInfo_General, UnitName("target"),
 			(buffs == "" and sRAB_BuffOutput_BuffInfo_None or buffs),
@@ -478,7 +440,7 @@ function RAB_QueryCTRAVersion(userData, needraw, needtxt)
 			if (cv) then
 				total = total + 1;
 				isbuffed = false;
-				append = "";
+				local append = "";
 				if (cv >= pv) then
 					isbuffed = true;
 					buffed = buffed + 1;
@@ -517,29 +479,36 @@ function RAB_QueryCTRAVersion(userData, needraw, needtxt)
 	return buffed, 0, total, misc, txthead, hashead, txt, hastxt, invert, raw, "version", "%s";
 end
 
+
 function RAB_ScanRaid(userData)
 	local scanwhat = RAB_Buffs[userData.buffKey].ext;
-	local out, oc, buff, texture = "", {};
+	local out, oc, order = "", {}, {};
 	for i, u, group in RAB_GroupMembers(userData) do
-		local j = 1;
-		while (UnitBuff(u, j)) do
-			buff = RAB_TextureToBuff(UnitBuff(u, j));
+		local list = RAB_GetAuraCache(u).buffs;
+		for j = 1, list.n do
+			local e = list[j];
+			local buff = RAB_AuraToBuff(e);
+			local label;
 			if (buff ~= nil and scanwhat == "known") then
-				oc[buff] = (oc[buff] ~= nil and oc[buff] or 0) + 1;
+				label = RAB_Buffs[buff].name;
 			elseif (buff == nil and scanwhat == "unknown") then
-				texture = RAB_SanitizeTexture(UnitBuff(u, j));
-				oc[texture] = (oc[texture] ~= nil and oc[texture] or 0) + 1;
+				label = e.name .. " (" .. tostring(e.spellId) .. ")";
 			end
-			j = j + 1;
+			if (label ~= nil) then
+				if (oc[label] == nil) then
+					oc[label] = 0;
+					tinsert(order, label);
+				end
+				oc[label] = oc[label] + 1;
+			end
 		end
 	end
-	for key, val in oc do
-		out = (out == "" and "" or (out .. ", ")) ..
-				"[" .. (scanwhat == "known" and RAB_Buffs[userData.buffKey].name or key) .. "]x" .. val;
+	for _, label in ipairs(order) do
+		out = (out == "" and "" or (out .. ", ")) .. "[" .. label .. "]x" .. oc[label];
 	end
 
 	out = (scanwhat == "known" and "B" or "Unknown b") .. "uffs: " .. (out == "" and "none" or out) .. ".";
-	return 1, 1, "", "", "", out, out;
+	return 1, 0, 1, "", "", "", out, out;
 end
 
 function RAB_QueryHealth(userData, needraw, needtxt)
@@ -606,8 +575,8 @@ function RAB_QueryHealth(userData, needraw, needtxt)
 						floor(hp_cur * 100 / (hp_max > 0 and hp_max or 1)),
 						string.format(sRAB_BuffOutput_Health_AlivePart, hp_alive, hp_alivetext));
 			else
-				repl.txt = sRAB_BuffOutput_Health_EveryoneDead;
-				repl.hastxt = sRAB_BuffOutput_Health_EveryoneDead;
+				txt = sRAB_BuffOutput_Health_EveryoneDead;
+				hastxt = sRAB_BuffOutput_Health_EveryoneDead;
 			end
 		else
 			txt = string.format(sRAB_BuffOutput_Health_Default, hp_cur, hp_max,
@@ -635,11 +604,11 @@ function RAB_QueryInventoryItem(userData, needraw, needtxt)
 	local i, u, group, isbuffed, item;
 
 	for i, u, group in RAB_GroupMembers(userData) do
-		if (CheckInteractDistance(u, 1) and GetInventoryItemLink(u, slot)) then
+		if (CheckInteractDistance(u, 1) and GetInventoryItemID(u, slot)) then
 			total = total + 1;
 			isbuffed = false;
-			_, _, item = string.find(tostring(GetInventoryItemLink(u, slot)), "item:(%d+):");
-			if (tonumber(item) == match) then
+			item = GetInventoryItemID(u, slot);
+			if (item == match) then
 				isbuffed = true;
 				buffed = buffed + 1;
 				hastxt = hastxt .. UnitName(u) .. ", ";
@@ -654,7 +623,7 @@ function RAB_QueryInventoryItem(userData, needraw, needtxt)
 							group = group,
 							buffed = isbuffed,
 							unit = u,
-							append = append
+							append = ""
 						});
 			end
 		end
@@ -760,7 +729,7 @@ function RAB_QueryWater(userData, needraw, needtxt)
 	local isbuffed, append;
 	for i, u, group in RAB_GroupMembers(userData) do
 		if (UnitIsUnit(u, "player")) then
-			RAB_BuffTimers[UnitName(u) .. ".h2oc"] = RAB_CountItems(8079);
+			RAB_BuffTimers[UnitName(u) .. ".h2oc"] = C_Item.GetItemCount(8079);
 		end
 		if (RAB_BuffTimers[UnitName(u) .. ".h2oc"] ~= nil) then
 			total = total + 1;
@@ -805,31 +774,24 @@ function RAB_QueryWater(userData, needraw, needtxt)
 	return buffed, 0, total, misc, txthead, hashead, txt, hastxt, invert, raw, rawsort, false;
 end
 
-function RAB_QueryDebuff(userData, needraw, needtxt)
-	local btype = RAB_Buffs[bkey].ext
-	local bText = getglobal("sRAB_BuffOutput_Debuff_" ..
-			(btype == "" and "Typeless" or (btype == "SELF" and "Curable" or btype)));
 
-	local buffed, total, misc, txthead, hashead, txt, hastxt, invert, raw, rawsort = 0, 0, "",
+-- Group members carrying a debuff of one dispel type (the bar's ext: Magic, Curse, Poison, Disease) or,
+-- for "Curable", any debuff you can remove. Rebuilt on C_UnitAuras' dispel type.
+function RAB_QueryDebuff(userData, needraw, needtxt)
+	local btype = RAB_Buffs[userData.buffKey].ext;
+	local bText = getglobal("sRAB_BuffOutput_Debuff_" .. btype) or btype;
+
+	local buffed, total, misc, txthead, hashead, txt, hastxt, invert, raw = 0, 0, "",
 	string.format(sRAB_BuffOutput_Debuff_NotHave, bText), string.format(sRAB_BuffOutput_Debuff_Have, bText), "", "",
 	true;
 	if (needraw) then
 		raw = {};
 	end
-	local i, u, group, j, isbuffed, item;
-	local f = (btype == "SELF") and 1 or 0;
+	local i, u, group, isbuffed;
 	for i, u, group in RAB_GroupMembers(userData) do
-		if (not RAB_UnitIsDead(u)) then
+		if (RAB_IsEligible(u, userData)) then
 			total = total + 1;
-			j, isbuffed = 1, false;
-			while (UnitDebuff(u, j, f) ~= nil) do
-				local tex, app, type = UnitDebuff(u, j, f);
-				if (f == 1 or type == btype or (type == nil and btype == "")) then
-					isbuffed = true;
-					break ;
-				end
-				j = j + 1;
-			end
+			isbuffed = RAB_UnitHasDebuffType(u, btype);
 			if (needtxt and isbuffed) then
 				hastxt = hastxt .. UnitName(u) .. ", ";
 			elseif (needtxt and not isbuffed) then
@@ -845,7 +807,6 @@ function RAB_QueryDebuff(userData, needraw, needtxt)
 							class = RAB_UnitClass(u),
 							group = group,
 							unit = u,
-							append = append,
 							buffed = isbuffed
 						});
 			end
@@ -872,40 +833,37 @@ function RAB_QueryDebuff(userData, needraw, needtxt)
 	return buffed, 0, total, misc, txthead, hashead, txt, hastxt, invert, raw, "group", sRAB_Core_GroupFormat;
 end
 
-function RAB_CountItems(itemId, justNeedSlot)
-	local bag, slot, count = 0, 0, 0;
-
-	itemId = tostring(itemId);
-	for i = 0, 4 do
-		for j = 1, GetContainerNumSlots(i) do
-			local link = GetContainerItemLink(i, j);
-			if (link ~= nil) then
-				local _, _, id = string.find(link, "item:(%d+):");
-				if (id == itemId) then
-					local _, itemCount = GetContainerItemInfo(i, j);
-					count = count + itemCount;
-					bag, slot = i, j;
-					if (justNeedSlot ~= nil) then
-						return count, bag, slot;
-					end
-				end
+-- Bag and slot of the first stack of itemId, or nil.
+function RAB_FindItem(itemId)
+	itemId = tonumber(itemId);
+	for bag = 0, 4 do
+		for slot = 1, GetContainerNumSlots(bag) do
+			if (C_Container.GetContainerItemID(bag, slot) == itemId) then
+				return bag, slot;
 			end
 		end
 	end
-	return count, bag, slot;
+	return nil;
 end
 
 -- BLOCK 2: Casting functions
 
+-- Items are counted, cooled down and used by item ID through ClassicAPI (C_Item.GetItemCount,
+-- GetItemCooldown, C_Item.UseAtUnit / UseItemByName), so nothing parses bag links and nothing clears the
+-- target. Weapon oils and stones still go through UseContainerItem + PickupInventoryItem, which is how the
+-- client applies an item to a weapon slot.
 function RAB_UseItem(mode, userData)
 	local buffData = RAB_Buffs[userData.buffKey];
 	local itemId = buffData.itemId
 	local itemName = buffData.name
 	local itemUseOn = buffData.useOn
-	local count, bag, slot = RAB_CountItems(itemId, true);
-	-- RAB_Print(string.format('count %s bag %s slot %s', count, bag, slot))
-	if count == 0 and mode == 'tip' then
-		return string.format(sRAB_Tooltip_CastFail_NoItem, itemName)
+	local count = C_Item.GetItemCount(itemId);
+	if count == 0 then
+		if mode == 'tip' then
+			return string.format(sRAB_Tooltip_CastFail_NoItem, itemName)
+		end
+		RAB_Print(string.format(sRAB_CastingLayer_NoItem, itemName), "warn");
+		return false
 	end
 	if mode == 'tip' then
 		if userData.useOnClick ~= true then
@@ -914,14 +872,10 @@ function RAB_UseItem(mode, userData)
 		return string.format(sRAB_Tooltip_ClickToUse, itemName)
 	end
 
-	if (GetContainerItemCooldown(bag, slot) ~= 0) then
-		if (mode == "cast") then
-			RAB_Print(string.format(sRAB_CastingLayer_Cooldown, itemName), "warn");
-			return false;
-		else
-			local start, duration = GetContainerItemCooldown(bag, slot);
-			return string.format(sRAB_Tooltip_CastFail_Cooldown, start + duration - GetTime());
-		end
+	local start, duration = GetItemCooldown(itemId);
+	if (start ~= nil and start > 0 and duration > 0) then
+		RAB_Print(string.format(sRAB_CastingLayer_Cooldown, itemName), "warn");
+		return false;
 	end
 
 	if userData.useOnClick ~= true then
@@ -929,7 +883,7 @@ function RAB_UseItem(mode, userData)
 	end
 
 	local buffs = {}
-	if buffData.useOn == 'weapon' or buffData.useOn == 'weaponOH' then
+	if itemUseOn == 'weapon' or itemUseOn == 'weaponOH' then
 		buffs = RAB_CollectPlayerWeaponBuffs(buffData)
 		local buffed = RAB_WeaponIsBuffed(buffs, buffData)
 		if buffed > 0 then
@@ -943,66 +897,48 @@ function RAB_UseItem(mode, userData)
 		end
 	end
 
-	if itemUseOn then
-		if itemUseOn == 'player' then
-			-- spell scroll
-			ClearTarget();
-			UseContainerItem(bag, slot);
-			local shouldRetarget = UnitExists("target");
-			if (not SpellIsTargeting()) then
-				RAB_Print(sRAB_CastingLayer_NoSession, "warn")
-				return false;
-			end
-			SpellTargetUnit('player');
-			if (shouldRetarget) then
-				TargetLastTarget();
-			end
-		elseif itemUseOn == 'weapon' then
-			-- weapon enchant
-			local slotName = 'MainHandSlot'
-			if buffs[slotName] == nil then
-				RAB_Print(string.format('[RABuffs] no weapon equipped'), "warn")
-			else
-				if buffs[slotName] ~= nil and buffs[slotName]['buffed'] == 0 then
-					ClearTarget();
-					UseContainerItem(bag, slot);
-					local shouldRetarget = UnitExists("target");
-					if (not SpellIsTargeting()) then
-						RAB_Print(sRAB_CastingLayer_NoSession, "warn")
-						return false;
-					end
-					PickupInventoryItem(GetInventorySlotInfo(slotName));
-					if (shouldRetarget) then
-						TargetLastTarget();
-					end
-				end
-			end
-		elseif itemUseOn == 'weaponOH' then
-			local slotName = 'SecondaryHandSlot'
-			if buffs[slotName] == nil then
-				RAB_Print(string.format('[RABuffs] no offhand weapon equipped'), "warn")
-			else
-				if buffs[slotName] ~= nil and buffs[slotName]['buffed'] == 0 then
-					ClearTarget();
-					UseContainerItem(bag, slot);
-					local shouldRetarget = UnitExists("target");
-					if (not SpellIsTargeting()) then
-						RAB_Print(sRAB_CastingLayer_NoSession, "warn")
-						return false;
-					end
-					PickupInventoryItem(GetInventorySlotInfo(slotName));
-					if (shouldRetarget) then
-						TargetLastTarget();
-					end
-				end
-			end
-		else
-			RAB_Print(string.format('unknown useOn %s', itemUseOn), "warn")
+	if itemUseOn == 'player' then
+		-- spell scroll: used straight on yourself, the target stays as it is
+		if (not C_Item.UseAtUnit(itemId, "player")) then
+			RAB_Print(sRAB_CastingLayer_NoSession, "warn")
+			return false;
 		end
-	else
-		-- basic potion
+	elseif itemUseOn == 'weapon' or itemUseOn == 'weaponOH' then
+		local slotName = (itemUseOn == 'weapon') and 'MainHandSlot' or 'SecondaryHandSlot'
+		if buffs[slotName] == nil then
+			RAB_Print(sRAB_CastingLayer_NoWeapon, "warn")
+			return false
+		end
+		local bag, slot = RAB_FindItem(itemId);
+		if (bag == nil) then
+			RAB_Print(string.format(sRAB_CastingLayer_NoItem, itemName), "warn");
+			return false;
+		end
 		UseContainerItem(bag, slot);
+		if (not SpellIsTargeting()) then
+			RAB_Print(sRAB_CastingLayer_NoSession, "warn")
+			return false;
+		end
+		PickupInventoryItem(GetInventorySlotInfo(slotName));
+	elseif itemUseOn then
+		RAB_Print(string.format('unknown useOn %s', itemUseOn), "warn")
+		return false
+	else
+		-- potion, elixir, food
+		C_Item.UseItemByName(itemId);
 	end
+	RAB_ClearUnitBuffCache("player");
+	return true;
+end
+
+local function CastFailTip(mode, reason, howmuch)
+	if (mode ~= "tip") then
+		return false;
+	end
+	if (reason == "Cooldown") then
+		return string.format(sRAB_Tooltip_CastFail_Cooldown, floor(howmuch * 10) / 10);
+	end
+	return getglobal("sRAB_Tooltip_CastFail_" .. tostring(reason)) or false;
 end
 
 function RAB_DefaultCastingHandler(mode, userData)
@@ -1020,7 +956,6 @@ function RAB_DefaultCastingHandler(mode, userData)
 	end
 
 	if (buffData.type == "self" or buffData.type == "aura") then
-		RAB_ClearUnitBuffCache("player")
 		local isup = RAB_IsBuffUp("player", userData.buffKey);
 		if (RAB_ShouldRecast("player", userData.buffKey, isup)) then
 			if userData.useOnClick == true then
@@ -1031,13 +966,8 @@ function RAB_DefaultCastingHandler(mode, userData)
 		end
 		local buff = sRAB_SpellNames[userData.buffKey];
 		local canbuff, reason, howmuch = RAB_CastSpell_IsCastable(userData.buffKey, true, true);
-		if (not (canbuff or dogroupbuff)) then
-			if (reason == "Cooldown") then
-				return mode == "tip" and
-						string.format(getglobal("sRAB_Tooltip_CastFail_" .. reason), floor(howmuch * 10) / 10) or false;
-			else
-				return mode == "tip" and getglobal("sRAB_Tooltip_CastFail_" .. reason) or false;
-			end
+		if (not canbuff) then
+			return CastFailTip(mode, reason, howmuch);
 		end
 		if (mode == "tip") then
 			return string.format(clicktocast, buff, RAB_Chat_Colors[RAB_UnitClass("player")] .. UnitName("player"));
@@ -1046,12 +976,8 @@ function RAB_DefaultCastingHandler(mode, userData)
 				return false
 			end
 			CastSpellByName(buff, true);
-
-			-- clear player cache
 			RABui_LastBuffEvent = GetTime()
 			RAB_ClearUnitBuffCache("player")
-
-			RAB_ResetRecastTimer("player", userData);
 			RAB_Print(string.format(sRAB_CastBuff_CastNeutral, buff));
 			return true;
 		end
@@ -1067,12 +993,11 @@ function RAB_DefaultCastingHandler(mode, userData)
 
 	local canbuff, reason, howmuch = RAB_CastSpell_IsCastable(userData.buffKey, true, true);
 	if (not (canbuff or dogroupbuff)) then
-		if (reason == "Cooldown") then
-			return mode == "tip" and string.format(getglobal("sRAB_Tooltip_CastFail_" .. reason), floor(howmuch * 10) /
-					10) or false;
-		else
-			return mode == "tip" and getglobal("sRAB_Tooltip_CastFail_" .. reason) or false;
-		end
+		return CastFailTip(mode, reason, howmuch);
+	end
+
+	if (mode == "cast" and userData.useOnClick ~= true) then
+		return false
 	end
 
 	if (UnitInRaid("player") and RABui_Settings.partymode == true) then
@@ -1084,54 +1009,46 @@ function RAB_DefaultCastingHandler(mode, userData)
 		end
 	end
 
-	local people, group, i, u, g, ir = {};
-	if (mode == "cast") then
-		if userData.useOnClick ~= true then
-			return false
-		end
-		if (not RAB_CastSpell_Start(userData.buffKey)) then
-			return false;
-		end
-	end
-	local faderenew, pvpfail, rangefail = {}, 0, 0;
+	-- range is measured with the spell that will be cast (group and single versions share a range)
+	local rangeKey = canbuff and userData.buffKey or buffData.bigcast;
+	local people, faderenew, pvpfail, rangefail = {}, {}, 0, 0;
+	local now = GetTime();
 	for i, u, g in RAB_GroupMembers(userData) do
-		local ekey = UnitName(u) .. "." .. userData.buffKey;
 		local pri = UnitIsUnit("player", u) and (buffData.selfPriority ~= nil and buffData.selfPriority or 5) or
 				1;
 		if (g == mygroup) then
 			pri = pri + 1;
 		end
-		if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] >= time()) then
+		if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] >= now) then
 			pri = pri / 10;
 		end
 		if (buffData.priority ~= nil and buffData.priority[strlower(RAB_UnitClass(u))] ~= nil) then
-			pri = pri +
-					buffData.priority[strlower(RAB_UnitClass(u))];
+			pri = pri + buffData.priority[strlower(RAB_UnitClass(u))];
 		end
-		if (RAB_IsEligible(u, userData) and RAB_IsSanePvP(u) and RAB_RangeCheck(mode, u) and pri > 0) then
-			RAB_ClearUnitBuffCache(u) -- clear cache to get most recent data for u
-			if (not RAB_IsBuffUp(u, userData.buffKey)) then
-				tinsert(people, { u = u, group = g, class = RAB_UnitClass(u), p = pri });
-			elseif (RAB_ShouldRecast(u, userData.buffKey, true) and pri > 0) then
-				pri = 10000 - RAB_BuffTimers[ekey] + GetTime();
-				if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] >= time()) then
-					pri = pri / 10;
-				end
-				tinsert(faderenew, { u = u, group = g, class = RAB_UnitClass(u), p = pri })
-			end
-		elseif (RAB_IsEligible(u, userData) and pri > 0) then
-			RAB_ClearUnitBuffCache(u) -- clear cache to get most recent data for u
+		if (pri > 0 and RAB_IsEligible(u, userData)) then
 			if (not RAB_IsSanePvP(u)) then
 				pvpfail = pvpfail + 1;
-			elseif (not RAB_IsBuffUp(u, userData.buffKey) and not RAB_RangeCheck(mode, u, userData.buffKey)) then
-				rangefail = rangefail + 1;
+			elseif (not RAB_RangeCheck(u, rangeKey)) then
+				if (not RAB_IsBuffUp(u, userData.buffKey)) then
+					rangefail = rangefail + 1;
+				end
+			elseif (not RAB_IsBuffUp(u, userData.buffKey)) then
+				tinsert(people, { u = u, group = g, class = RAB_UnitClass(u), p = pri });
+			else
+				local fading, fadetime = RAB_ShouldRecast(u, userData.buffKey, true);
+				if (fading) then
+					pri = 10000 - fadetime;
+					if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] >= now) then
+						pri = pri / 10;
+					end
+					tinsert(faderenew, { u = u, group = g, class = RAB_UnitClass(u), p = pri })
+				end
 			end
 		end
 	end
 
 	if (table.getn(people) == 0 and table.getn(faderenew) == 0) then
 		if (mode == "cast") then
-			RAB_CastSpell_Abort();
 			if (pvpfail > 0 or rangefail > 0) then
 				UIErrorsFrame:AddMessage(
 						string.format(sRAB_CastingLayer_NoCast, buffData.name, pvpfail, rangefail), 1, 0, 0, 1, 1.5);
@@ -1152,7 +1069,7 @@ function RAB_DefaultCastingHandler(mode, userData)
 	end
 	if (dogroupbuff) then
 		local bsort, bsortkeys, stype = {}, {}, buffData.bigsort;
-		for key, val in people do
+		for _, val in ipairs(people) do
 			if (bsortkeys[val[stype]] == nil) then
 				tinsert(bsort, { pri = val.p, cast = val.u, heads = 1, key = val[stype] });
 				bsortkeys[val[stype]] = table.getn(bsort);
@@ -1166,30 +1083,21 @@ function RAB_DefaultCastingHandler(mode, userData)
 		end);
 		if (bsort[1].heads >= buffData.bigthreshold or RABui_Settings.alwayscastbigbuffs) then
 			local bname = sRAB_SpellNames[buffData.bigcast];
+			local who = RAB_Chat_Colors[RAB_UnitClass(bsort[1].cast)] .. UnitName(bsort[1].cast) .. " [" .. bsort[1].key .. "]";
 			if (mode == "cast") then
-				if userData.useOnClick ~= true then
-					return false
-				end
-				RAB_CastSpell_Abort();
-				if (RAB_CastSpell_Start(buffData.bigcast)) then
-					RAB_CastSpell_Target(bsort[1].cast);
-					RAB_ResetRecastTimer(bsort[1].cast, userData, buffData.bigsort);
-					RAB_Print(string.format(sRAB_CastBuff_Cast, bname,
-							RAB_Chat_Colors[RAB_UnitClass(bsort[1].cast)] ..
-									UnitName(bsort[1].cast) .. " [" .. bsort[1].key .. "]"));
+				if (RAB_CastSpell_AtUnit(buffData.bigcast, bsort[1].cast)) then
+					RAB_Print(string.format(sRAB_CastBuff_Cast, bname, who));
 					return true;
-				else
-					RAB_CastSpell_Start(userData.buffKey);
 				end
+				-- the group version failed: fall through to the single-target buff
 			else
-				if userData.useOnClick ~= true then
-					clicktocast = sRAB_Tooltip_ClickToUseDisabled
-				end
-				return string.format(clicktocast, bname,
-						RAB_Chat_Colors[RAB_UnitClass(bsort[1].cast)] ..
-								UnitName(bsort[1].cast) .. " [" .. bsort[1].key .. "]");
+				return string.format(clicktocast, bname, who);
 			end
 		end
+	end
+
+	if (not canbuff) then
+		return CastFailTip(mode, reason, howmuch);
 	end
 
 	table.sort(people, function(a, b)
@@ -1197,22 +1105,16 @@ function RAB_DefaultCastingHandler(mode, userData)
 	end);
 	local bname = sRAB_SpellNames[userData.buffKey] ~= nil and sRAB_SpellNames[userData.buffKey] or buffData.name;
 	if (mode == "cast") then
-		RAB_CastSpell_Target(people[1].u);
-		RAB_ResetRecastTimer(people[1].u, userData);
-		-- clear buff cache for people[1].u
-		RAB_Print(string.format(sRAB_CastBuff_Cast,
-				sRAB_SpellNames[userData.buffKey] ~= nil and sRAB_SpellNames[userData.buffKey] or buffData.name,
-				RAB_Chat_Colors[RAB_UnitClass(people[1].u)] .. UnitName(people[1].u)));
-		return true;
+		if (RAB_CastSpell_AtUnit(userData.buffKey, people[1].u)) then
+			RAB_Print(string.format(sRAB_CastBuff_Cast, bname,
+					RAB_Chat_Colors[RAB_UnitClass(people[1].u)] .. UnitName(people[1].u)));
+			return true;
+		end
+		return false;
 	elseif (mode == "tip") then
 		return string.format(clicktocast, bname, RAB_Chat_Colors[RAB_UnitClass(people[1].u)] .. UnitName(people[1].u));
 	end
 	return people;
-end
-
-function RAB_RangeCheck(mode, u)
-	-- Optimistic.
-	return (mode == "tip" and UnitIsVisible(u)) or (mode == "cast" and SpellCanTargetUnit(u));
 end
 
 function RAB_CastInventoryItem(mode, userData)
@@ -1224,17 +1126,18 @@ function RAB_CastInventoryItem(mode, userData)
 		return (mode == "tip" and sRAB_Tooltip_CastFail_Combat or nil);
 	end
 	local _, _, inv, iid = string.find(buffData.ext, "(%d+):(%d+)");
+	inv, iid = tonumber(inv), tonumber(iid);
 
-	if (string.find(tostring(GetInventoryItemLink("player", inv)), "item:" .. iid .. ":") ~= nil) then
+	if (GetInventoryItemID("player", inv) == iid) then
 		return nil;
 	end
 
-	local iname = GetItemInfo(tonumber(iid));
+	local iname = GetItemInfo(iid);
 	if (iname == nil) then
 		iname = string.format(sRAB_BuffOutput_Item_Unknown, iid);
 	end
-	local c, b, s = RAB_CountItems(iid, true);
-	if (c == 0) then
+	local b, s = RAB_FindItem(iid);
+	if (b == nil) then
 		return (mode == "tip" and string.format(sRAB_Tooltip_CastFail_NoItem, iname) or nil);
 	end
 	if (mode == "tip") then
@@ -1245,23 +1148,24 @@ function RAB_CastInventoryItem(mode, userData)
 	end
 end
 
-function RAB_CastSoulstone(mode, userData)
-	local i, item, bag, slot;
+-- Major, Greater, Soulstone, Lesser, Minor: the best stone you carry is used first.
+local RAB_SoulstoneItems = { 16896, 16895, 5232, 16893, 16892 };
 
+function RAB_CastSoulstone(mode, userData)
 	if (sRAB_SpellNames.ss == nil or RAB_UnitClass("player") ~= "Warlock") then
 		return false; -- We don't do this, sorry.
 	end
 
-	-- Stage 1: Do we have a stone?
-	for i = 16892, 16896 do
-		_, bag, slot = RAB_CountItems(i == 16894 and 5232 or i, true);
-		if (bag ~= 0) then
-			item = i;
+	-- Stage 1: Do we have a stone? (counted by ID, so a stone in the backpack, bag 0, is found too)
+	local item;
+	for _, id in ipairs(RAB_SoulstoneItems) do
+		if (C_Item.GetItemCount(id) > 0) then
+			item = id;
 			break ;
 		end
 	end
 
-	if (bag == 0) then
+	if (item == nil) then
 		-- We need a stone!
 		if (mode == "tip") then
 			return string.format(sRAB_Tooltip_ClickToCastNeutral, sRAB_SpellNames.ss);
@@ -1270,32 +1174,32 @@ function RAB_CastSoulstone(mode, userData)
 			RAB_Print(string.format(sRAB_CastBuff_CastNeutral, sRAB_SpellNames.ss));
 			return true;
 		end
-	else
-		if (GetContainerItemCooldown(bag, slot) ~= 0) then
-			if (mode == "cast") then
-				RAB_Print(string.format(sRAB_CastingLayer_Cooldown, GetItemInfo(item)), "warn");
-				return false;
-			else
-				local start, duration = GetContainerItemCooldown(bag, slot);
-				return string.format(sRAB_Tooltip_CastFail_Cooldown, start + duration - GetTime());
-			end
-		end
-		local shouldRetarget = UnitExists("target");
+		return false;
+	end
+
+	local itemName = GetItemInfo(item) or RAB_Buffs.ss.name;
+	local start, duration = GetItemCooldown(item);
+	if (start ~= nil and start > 0 and duration > 0) then
 		if (mode == "cast") then
-			ClearTarget();
-			UseContainerItem(bag, slot);
-			if (not SpellIsTargeting()) then
-				RAB_Print(sRAB_CastingLayer_NoSession, "warn")
-				return false;
-			end
+			RAB_Print(string.format(sRAB_CastingLayer_Cooldown, itemName), "warn");
+			return false;
 		end
-		local buffKey, people, pri = "ss", {}, 0;
-		local maxpri, maxpriunit = 0, "";
-		for i, u, g in RAB_GroupMembers(userData) do
-			if (RAB_IsEligible(u, userData) and RAB_IsSanePvP(u) and not RAB_IsBuffUp(u, buffKey) and RAB_RangeCheck(mode, u)) then
+		return string.format(sRAB_Tooltip_CastFail_Cooldown, floor((start + duration - GetTime()) * 10) / 10);
+	end
+
+	local buffKey, pri = "ss", 0;
+	local maxpri, maxpriunit = 0, "";
+	local now = GetTime();
+	for i, u, g in RAB_GroupMembers(userData) do
+		if (RAB_IsEligible(u, userData) and RAB_IsSanePvP(u) and not RAB_IsBuffUp(u, buffKey)) then
+			local inRange = UnitIsUnit("player", u) or C_Item.IsItemInRange(item, u);
+			if (inRange == nil) then
+				inRange = UnitIsVisible(u);
+			end
+			if (inRange) then
 				pri = UnitIsUnit("player", u) and
 						(RAB_Buffs[buffKey].selfPriority ~= nil and RAB_Buffs[buffKey].selfPriority or 5) or 1;
-				if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] >= time()) then
+				if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] >= now) then
 					pri = pri / 10;
 				end
 				if (RAB_Buffs[buffKey].priority ~= nil and RAB_Buffs[buffKey].priority[strlower(RAB_UnitClass(u))] ~= nil) then
@@ -1307,25 +1211,25 @@ function RAB_CastSoulstone(mode, userData)
 				end
 			end
 		end
-		if (mode == "cast" and maxpri > 0) then
-			SpellTargetUnit(maxpriunit);
-			if (shouldRetarget) then
-				TargetLastTarget();
-			end
-			RAB_Print(string.format(sRAB_CastBuff_Cast, GetItemInfo(item),
-					RAB_Chat_Colors[RAB_UnitClass(maxpriunit)] .. UnitName(maxpriunit)));
-			return true;
-		elseif (mode == "tip" and maxpri > 0) then
-			return string.format(sRAB_Tooltip_ClickToSoulstone,
-					RAB_Chat_Colors[RAB_UnitClass(maxpriunit)] .. UnitName(maxpriunit));
-		elseif (mode == "cast") then
-			SpellStopCasting();
-			if (shouldRetarget) then
-				TargetLastTarget();
-			end
-		end
 	end
-	return false;
+	if (maxpri <= 0) then
+		return false;
+	end
+	if (mode == "cast") then
+		if (not C_Item.UseAtUnit(item, maxpriunit)) then
+			RAB_Print(string.format(sRAB_CastBuff_CouldNotCast, itemName), "warn");
+			return false;
+		end
+		if (not UnitIsUnit("player", maxpriunit)) then
+			RAB_CastLog[maxpriunit] = now + 15;
+		end
+		RAB_ClearUnitBuffCache(maxpriunit);
+		RAB_Print(string.format(sRAB_CastBuff_Cast, itemName,
+				RAB_Chat_Colors[RAB_UnitClass(maxpriunit)] .. UnitName(maxpriunit)));
+		return true;
+	end
+	return string.format(sRAB_Tooltip_ClickToSoulstone,
+			RAB_Chat_Colors[RAB_UnitClass(maxpriunit)] .. UnitName(maxpriunit));
 end
 
 function RAB_CastResurrect(mode, userData)
@@ -1336,12 +1240,13 @@ function RAB_CastResurrect(mode, userData)
 	end
 
 	local toRes = {}; -- {u="",pri=deci};
+	local now = GetTime();
 	for i, u, group in RAB_GroupMembers(userData) do
-		if (UnitIsUnit(u, "player") ~= 1 and UnitIsVisible(u) and (RAB_UnitIsDead(u) and not UnitIsGhost(u)) and RAB_IsSanePvP(u) and (RAB_CTRA_IsBeingRessed == nil or not RAB_CTRA_IsBeingRessed(UnitName(u)))) then
+		if (not UnitIsUnit(u, "player") and UnitIsVisible(u) and (RAB_UnitIsDead(u) and not UnitIsGhost(u)) and RAB_IsSanePvP(u) and (RAB_CTRA_IsBeingRessed == nil or not RAB_CTRA_IsBeingRessed(UnitName(u)))) then
 			local pri = (RAB_UnitClass(u) == "Priest" and 2 or 0) + (RAB_UnitClass(u) == "Paladin" and 2 or 0) +
 					(RAB_UnitClass(u) == "Shaman" and 2 or 0) + (RAB_UnitClass(u) == "Mage" and 1 or 0) +
 					(RAB_Versions[UnitName(u)] ~= nil and 0.25 or 0);
-			if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] > GetTime()) then
+			if (RAB_CastLog[u] ~= nil and RAB_CastLog[u] > now) then
 				pri = pri / 15;
 			end
 			tinsert(toRes, { u = u, pri = pri });
@@ -1355,26 +1260,31 @@ function RAB_CastResurrect(mode, userData)
 		end);
 	end
 
-	if (mode == "tip") then
-		return string.format(sRAB_Tooltip_ClickToCast, sRAB_SpellNames[res],
-				RAB_Chat_Colors[RAB_UnitClass(toRes[1].u)] .. UnitName(toRes[1].u));
-	end
-
-	if (not RAB_CastSpell_Start(res)) then
-		return false;
-	end
-
+	-- the first one in range; the tooltip falls back to the top of the list when nobody is
+	local target;
 	for i = 1, table.getn(toRes) do
-		u = toRes[i].u;
-		if (SpellCanTargetUnit(u)) then
-			RAB_CastSpell_Target(u);
-			RAB_Print(string.format(sRAB_CastBuff_Cast, sRAB_SpellNames[res],
-					RAB_Chat_Colors[RAB_UnitClass(u)] .. UnitName(u)));
-			RAB_PendingRes[UnitName(u)] = GetTime() + 70;
-			return true;
+		if (RAB_RangeCheck(toRes[i].u, res)) then
+			target = toRes[i].u;
+			break ;
 		end
 	end
-	RAB_CastSpell_Abort();
+
+	if (mode == "tip") then
+		target = target or toRes[1].u;
+		return string.format(sRAB_Tooltip_ClickToCast, sRAB_SpellNames[res],
+				RAB_Chat_Colors[RAB_UnitClass(target)] .. UnitName(target));
+	end
+
+	if (target == nil) then
+		UIErrorsFrame:AddMessage(string.format(sRAB_CastingLayer_NoCast, sRAB_SpellNames[res], 0, table.getn(toRes)), 1, 0, 0, 1, 1.5);
+		return false;
+	end
+	if (RAB_CastSpell_AtUnit(res, target)) then
+		RAB_Print(string.format(sRAB_CastBuff_Cast, sRAB_SpellNames[res],
+				RAB_Chat_Colors[RAB_UnitClass(target)] .. UnitName(target)));
+		RAB_PendingRes[UnitName(target)] = GetTime() + 70;
+		return true;
+	end
 	return false;
 end
 
